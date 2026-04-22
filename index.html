@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalico Input Shaper Simulator</title>
+    
+    <script>
+    window.onerror = function(msg, url, line, col, error) {
+        document.addEventListener('DOMContentLoaded', function() {
+            document.body.innerHTML = '<div style="background:red; color:white; padding:20px; font-size:20px; z-index:9999; position:fixed; top:0; left:0; right:0;">GLOBAL ERROR: ' + msg + ' at line ' + line + '</div>' + document.body.innerHTML;
+        });
+        return false;
+    };
+    </script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Controls -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <i class="ph ph-wave-sine"></i>
+                <h2>ShaperSim</h2>
+            </div>
+            
+            <div class="control-section" style="background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.2);">
+                <h3 style="color: #00f0ff;"><i class="ph ph-floppy-disk"></i> Tuning Profiles</h3>
+                
+                <div class="control-group">
+                    <select id="profile-select" style="width: 100%; margin-bottom: 8px;">
+                        <option value="">-- Select Profile --</option>
+                    </select>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="profile-name" placeholder="Profile name..." style="flex: 1; padding: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; border-radius: 4px;">
+                        <button id="save-profile-btn" style="background: rgba(0, 240, 255, 0.2); color: #00f0ff; border: 1px solid rgba(0, 240, 255, 0.4); border-radius: 4px; padding: 0 10px; cursor: pointer;"><i class="ph ph-floppy-disk"></i></button>
+                        <button id="delete-profile-btn" style="background: rgba(255, 50, 50, 0.2); color: #ff3232; border: 1px solid rgba(255, 50, 50, 0.4); border-radius: 4px; padding: 0 10px; cursor: pointer;"><i class="ph ph-trash"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3><i class="ph ph-sliders"></i> Simulation Settings</h3>
+                
+                <div class="control-group">
+                    <label for="damping-ratio">
+                        <span>Damping Ratio</span>
+                        <span id="damping-val" class="value-display">0.010</span>
+                    </label>
+                    <input type="range" id="damping-ratio" min="0.001" max="0.100" step="0.001" value="0.010">
+                </div>
+                
+                <div class="control-group">
+                    <label for="scv">
+                        <span>Square Corner Velocity</span>
+                        <span id="scv-val" class="value-display">5.0</span>
+                    </label>
+                    <input type="range" id="scv" min="1.0" max="20.0" step="0.5" value="5.0">
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Graph Settings</h3>
+                <div class="control-group">
+                    <label for="scale-x">Max Frequency (Hz)</label>
+                    <input type="number" id="scale-x" value="150" step="10" min="50" max="400">
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3><i class="ph ph-cube"></i> CoreXY Mechanicals</h3>
+                
+                <div class="control-group">
+                    <label for="drive-type">Drive Configuration</label>
+                    <select id="drive-type">
+                        <option value="2">2WD (Standard CoreXY)</option>
+                        <option value="4">AWD (4-Motor CoreXY)</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label for="toolhead-weight">Toolhead Weight (g)</label>
+                    <input type="number" id="toolhead-weight" value="450" step="10">
+                </div>
+
+                <div class="control-group">
+                    <label for="y-gantry-weight">Y Gantry Weight (g)</label>
+                    <input type="number" id="y-gantry-weight" value="650" step="10">
+                </div>
+
+                <div class="control-group">
+                    <label for="printer-size">Printer Build Size (mm)</label>
+                    <input type="number" id="printer-size" value="350" step="10" min="100" max="600">
+                </div>
+
+                <div class="control-group">
+                    <label for="belt-length">A/B Belt Path Length (mm)</label>
+                    <input type="number" id="belt-length" value="2200" step="10">
+                </div>
+                
+                <div class="control-group">
+                    <label for="belt-type">Belt Type</label>
+                    <select id="belt-type">
+                        <option value="12000">GT2 6mm (Standard)</option>
+                        <option value="18000">GT2 9mm (Heavy Duty)</option>
+                        <option value="25000">GT2 12mm (Extreme)</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="belt-tune">Gates Belt Tune (Hz @ 150mm span)</label>
+                    <input type="range" id="belt-tune" min="50" max="300" step="1" value="110">
+                    <div class="tension-display">
+                        <span id="tension-val">110 Hz</span>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <label for="frame-stiffness">Frame Stiffness</label>
+                    <input type="range" id="frame-stiffness" min="0.5" max="5.0" step="0.1" value="1.0">
+                    <div class="tension-display" style="display: flex; justify-content: space-between; align-items: flex-start; margin-top: 4px;">
+                        <span style="font-size: 11px; color: var(--text-secondary); text-align: left; line-height: 1.3;">
+                            0.5 = Acrylic/Poor<br>
+                            1.0 = Standard 2020<br>
+                            5.0 = Solid CNC Milled
+                        </span>
+                        <span id="stiffness-val" style="margin-top: 4px;">1.0</span>
+                    </div>
+                </div>
+                
+            </div>
+            
+            <div class="control-section">
+                <h3>Mechanical Imperfections</h3>
+                
+                <details class="sub-category" open>
+                    <summary>Toolhead & Gantry Mass</summary>
+                    <div class="sub-category-content">
+                        <div class="control-group">
+                            <label for="twist-x">
+                                <span>X COM Offset (mm)</span>
+                                <span id="twist-x-val" class="value-display">0 mm</span>
+                            </label>
+                            <input type="range" id="twist-x" min="0" max="60" step="1" value="0">
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="twist-y">
+                                <span>Y COM Offset (mm)</span>
+                                <span id="twist-y-val" class="value-display">0 mm</span>
+                            </label>
+                            <input type="range" id="twist-y" min="0" max="60" step="1" value="0">
+                        </div>
+
+                        <div class="control-group">
+                            <label for="twist-z">
+                                <span>Z COM Offset (mm)</span>
+                                <span id="twist-z-val" class="value-display">0 mm</span>
+                            </label>
+                            <input type="range" id="twist-z" min="0" max="60" step="1" value="0">
+                        </div>
+
+                        <div class="control-group">
+                            <label for="toolhead-stiffness">
+                                <span>Toolhead Material Stiffness</span>
+                                <span id="th-stiff-val" class="value-display">1.0x (ABS)</span>
+                            </label>
+                            <input type="range" id="toolhead-stiffness" min="0.5" max="2.5" step="0.1" value="1.0">
+                        </div>
+
+                        <div class="control-group">
+                            <label for="loose-part">
+                                <span>Loose Hotend/Probe (Tuned Mass)</span>
+                                <span id="loose-part-val" class="value-display">0%</span>
+                            </label>
+                            <input type="range" id="loose-part" min="0" max="100" step="5" value="0">
+                        </div>
+
+                        <div class="control-group">
+                            <label for="gantry-racking">
+                                <span>Y-Axis Gantry Racking</span>
+                                <span id="racking-val" class="value-display">0%</span>
+                            </label>
+                            <input type="range" id="gantry-racking" min="0" max="100" step="5" value="0">
+                        </div>
+                    </div>
+                </details>
+
+                <details class="sub-category">
+                    <summary>Drive System & Frame</summary>
+                    <div class="sub-category-content">
+                        <div class="control-group">
+                            <label for="belt-tension-diff">
+                                <span>Unequal Belt Tension (Split Peak)</span>
+                                <span id="belt-diff-val" class="value-display">0%</span>
+                            </label>
+                            <input type="range" id="belt-tension-diff" min="0" max="30" step="1" value="0">
+                        </div>
+
+                        <div class="control-group">
+                            <label for="bearing-noise">
+                                <span>Bearing Noise Floor</span>
+                                <span id="noise-val" class="value-display">5%</span>
+                            </label>
+                            <input type="range" id="bearing-noise" min="0" max="100" step="1" value="5">
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="harmonic-ring">
+                                <span>Frame Harmonics</span>
+                                <span id="harmonic-val" class="value-display">0%</span>
+                            </label>
+                            <input type="range" id="harmonic-ring" min="0" max="100" step="5" value="0">
+                        </div>
+                    </div>
+                </details>
+
+                <details class="sub-category">
+                    <summary>External & Umbilical</summary>
+                    <div class="sub-category-content">
+                        <div class="control-group">
+                            <label for="external-sway">
+                                <span>External Sway Amplitude (Table/Feet)</span>
+                                <span id="sway-val" class="value-display">0%</span>
+                            </label>
+                            <input type="range" id="external-sway" min="0" max="100" step="5" value="0">
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="external-sway-freq">
+                                <span>External Sway Frequency (Hz)</span>
+                                <span id="sway-freq-val" class="value-display">18 Hz</span>
+                            </label>
+                            <input type="range" id="external-sway-freq" min="5" max="35" step="1" value="18">
+                        </div>
+
+                        <div class="control-group">
+                            <label for="squishy-feet">
+                                <span>Squishy Materials (Table/Feet Broadening)</span>
+                                <span id="squishy-val" class="value-display">0%</span>
+                            </label>
+                            <input type="range" id="squishy-feet" min="0" max="100" step="5" value="0">
+                        </div>
+
+                        <div class="control-group">
+                            <label for="hose-drag">
+                                <span>Umbilical/Hose Drag Amplitude</span>
+                                <span id="hose-drag-val" class="value-display">0%</span>
+                            </label>
+                            <input type="range" id="hose-drag" min="0" max="100" step="5" value="0">
+                        </div>
+
+                        <div class="control-group">
+                            <label for="hose-drag-freq">
+                                <span>Umbilical/Hose Drag Frequency (Hz)</span>
+                                <span id="hose-drag-freq-val" class="value-display">5 Hz</span>
+                            </label>
+                            <input type="range" id="hose-drag-freq" min="5" max="35" step="1" value="5">
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="hose-squishy">
+                                <span>Umbilical/Hose Damping (Broadening)</span>
+                                <span id="hose-squishy-val" class="value-display">0%</span>
+                            </label>
+                            <input type="range" id="hose-squishy" min="0" max="100" step="5" value="0">
+                        </div>
+                    </div>
+                </details>
+
+            </div>
+            
+            <div class="control-section">
+                <div class="prediction-box" style="margin-top: 0;">
+                    <h4>Predicted Resonance</h4>
+                    <div class="prediction-freq">
+                        <span id="pred-x">X: -- Hz</span>
+                        <span id="pred-y">Y: -- Hz</span>
+                    </div>
+                </div>
+            </div>
+            
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-nav" style="display: flex; justify-content: space-between; align-items: center; background: rgba(25, 28, 41, 0.6); padding: 12px 20px; border-radius: 8px; margin-bottom: 15px;">
+                <div>
+                    <h1 style="margin: 0; font-size: 1.2rem; color: #fff;">Predicted ADXL Resonance</h1>
+                    <p style="margin: 4px 0 0; font-size: 0.85rem; color: var(--text-secondary);">Power Spectral Density Simulation</p>
+                </div>
+                <div style="display: flex; gap: 15px; align-items: center;">
+                    <div class="toggle-group" style="display: flex; gap: 5px; align-items: center; background: rgba(15,17,26,0.8); padding: 4px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);">
+                        <button id="btn-snapshot" style="background: transparent; color: #fff; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 0.85rem;"><i class="ph ph-camera"></i> Snapshot</button>
+                        <button id="btn-clear-snapshot" style="background: transparent; color: #ff4444; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 0.85rem; display: none;"><i class="ph ph-x-circle"></i> Clear</button>
+                    </div>
+                    <div class="toggle-group" style="display: flex; gap: 10px; align-items: center; background: rgba(15,17,26,0.8); padding: 6px 15px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1);">
+                        <span style="font-size: 0.9rem; color: #adb5bd;">View Axis:</span>
+                        <select id="axis-toggle" style="background: transparent; border: none; color: #00f0ff; font-weight: bold; cursor: pointer; outline: none; font-size: 0.95rem;">
+                            <option value="x">X Axis</option>
+                            <option value="y">Y Axis</option>
+                        </select>
+                    </div>
+                </div>
+            </header>
+            <div class="chart-container">
+                <canvas id="accelChart"></canvas>
+            </div>
+            
+            <div class="bottom-panels">
+                <div class="panel">
+                    <h3><i class="ph ph-info"></i> About the Math & Attribution</h3>
+                    <p>This simulator runs a Javascript port of Klipper's internal <code>shaper_calibrate.py</code> math in real-time. The chart shows the maximum acceleration each shaper can sustain before it introduces too much smoothing (defined by the Smoothing Threshold) into your prints.</p>
+                    <p style="margin-top: 10px; font-size: 0.8rem; color: var(--text-secondary); border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">
+                        <strong>Attribution:</strong> The Input Shaper frequency response, attenuation scaling, and scoring algorithms are based on the source code of <a href="https://github.com/Klipper3d/klipper" target="_blank" style="color: var(--accent-primary); text-decoration: none;">Klipper3d</a>, which is licensed under the GNU GPLv3 license.
+                    </p>
+                </div>
+                <div class="panel">
+                    <h3><i class="ph ph-warning-circle"></i> Predictive Mode</h3>
+                    <p>The mechanical predictions are rough estimates based on a simplified mass-spring system $f = \frac{1}{2\pi} \sqrt{K/M}$. Actual results will vary. Always use an ADXL345 accelerometer for precise tuning.</p>
+                </div>
+            </div>
+
+            <!-- Simulated Klipper Output -->
+            <div class="card" style="margin-top: 1.5rem; position: relative;">
+                <h2 style="margin: 0 0 1rem 0;">Simulated Klipper Output</h2>
+                <pre id="klipper-console" style="background: rgba(15,17,26,0.6); padding: 1.5rem; border-radius: 8px; color: #adb5bd; font-family: 'Fira Code', monospace; font-size: 0.9rem; overflow-x: auto; white-space: pre-wrap; line-height: 1.5; border: 1px solid rgba(255,255,255,0.05); margin: 0;">Waiting for prediction...</pre>
+            </div>
+        </main>
+    </div>
+
+    <!-- Core Logic -->
+    <script src="shaper_logic.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
