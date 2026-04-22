@@ -23,6 +23,9 @@ const els = {
     frameStiffness: document.getElementById('frame-stiffness'),
     stiffnessVal: document.getElementById('stiffness-val'),
     driveType: document.getElementById('drive-type'),
+    motorTorque: document.getElementById('motor-torque'),
+    motorCurrent: document.getElementById('motor-current'),
+    motorCurrentVal: document.getElementById('motor-current-val'),
     
     // Imperfections
     twistX: document.getElementById('twist-x'),
@@ -35,12 +38,8 @@ const els = {
     thStiffVal: document.getElementById('th-stiff-val'),
     beltDiff: document.getElementById('belt-tension-diff'),
     beltDiffVal: document.getElementById('belt-diff-val'),
-    loosePart: document.getElementById('loose-part'),
-    loosePartVal: document.getElementById('loose-part-val'),
     racking: document.getElementById('gantry-racking'),
     rackingVal: document.getElementById('racking-val'),
-    bearingNoise: document.getElementById('bearing-noise'),
-    noiseVal: document.getElementById('noise-val'),
     externalSway: document.getElementById('external-sway'),
     swayVal: document.getElementById('sway-val'),
     swayFreq: document.getElementById('external-sway-freq'),
@@ -53,8 +52,6 @@ const els = {
     hoseSquishyVal: document.getElementById('hose-squishy-val'),
     squishyFeet: document.getElementById('squishy-feet'),
     squishyVal: document.getElementById('squishy-val'),
-    harmonicRing: document.getElementById('harmonic-ring'),
-    harmonicVal: document.getElementById('harmonic-val'),
     
     scaleX: document.getElementById('scale-x'),
     axisToggle: document.getElementById('axis-toggle'),
@@ -246,8 +243,12 @@ function updatePredictions() {
     
     els.tensionVal.textContent = `${hz} Hz (~${tension.toFixed(1)} N)`;
     
-    const freqX = predict_resonance(mX, beltEA, tension, frame, beltLen, driveType);
-    const freqY = predict_resonance(mY, beltEA, tension, frame, beltLen, driveType);
+    const motorTorque = parseFloat(els.motorTorque.value);
+    const motorCurrent = parseFloat(els.motorCurrent.value);
+    
+    // Defaulting to 1.8 degree (50) and 20T pulley (20)
+    const freqX = predict_resonance(mX, beltEA, tension, frame, beltLen, driveType, motorTorque, motorCurrent, 50, 20);
+    const freqY = predict_resonance(mY, beltEA, tension, frame, beltLen, driveType, motorTorque, motorCurrent, 50, 20);
     
     // Simulate Klipper's ADXL Post-Processing
     // We integrate up to the user-selected max frequency to support ultra-stiff AWD frames
@@ -262,10 +263,7 @@ function updatePredictions() {
         cross_twist: parseFloat(els.twistY.value),
         z_twist: parseFloat(els.twistZ.value),
         toolhead_stiffness: parseFloat(els.thStiff.value),
-        bearing_noise: parseFloat(els.bearingNoise.value), 
-        harmonic_ring: parseFloat(els.harmonicRing.value), 
         belt_tension_delta: parseFloat(els.beltDiff.value),
-        loose_component: parseFloat(els.loosePart.value),
         gantry_racking: parseFloat(els.racking.value),
         external_sway: parseFloat(els.externalSway.value),
         external_sway_freq: parseFloat(els.swayFreq.value),
@@ -282,10 +280,7 @@ function updatePredictions() {
         cross_twist: parseFloat(els.twistX.value),
         z_twist: parseFloat(els.twistZ.value),
         toolhead_stiffness: parseFloat(els.thStiff.value),
-        bearing_noise: parseFloat(els.bearingNoise.value), 
-        harmonic_ring: parseFloat(els.harmonicRing.value), 
         belt_tension_delta: parseFloat(els.beltDiff.value),
-        loose_component: parseFloat(els.loosePart.value),
         gantry_racking: parseFloat(els.racking.value),
         external_sway: parseFloat(els.externalSway.value),
         external_sway_freq: parseFloat(els.swayFreq.value),
@@ -416,6 +411,8 @@ function handleInputEvents(e) {
     const fStiff = parseFloat(els.frameStiffness.value);
     els.stiffnessVal.textContent = fStiff.toFixed(1);
     
+    els.motorCurrentVal.textContent = `${els.motorCurrent.value}%`;
+    
     els.twistXVal.textContent = `${els.twistX.value} mm`;
     els.twistYVal.textContent = `${els.twistY.value} mm`;
     els.twistZVal.textContent = `${els.twistZ.value} mm`;
@@ -428,16 +425,13 @@ function handleInputEvents(e) {
     els.thStiffVal.textContent = `${thV.toFixed(1)}x (${thLabel})`;
     
     els.beltDiffVal.textContent = `${els.beltDiff.value}%`;
-    els.loosePartVal.textContent = `${els.loosePart.value}%`;
     els.rackingVal.textContent = `${els.racking.value}%`;
-    els.noiseVal.textContent = `${els.bearingNoise.value}%`;
     els.swayVal.textContent = `${els.externalSway.value}%`;
     els.swayFreqVal.textContent = `${els.swayFreq.value} Hz`;
     els.hoseDragVal.textContent = `${els.hoseDrag.value}%`;
     els.hoseDragFreqVal.textContent = `${els.hoseDragFreq.value} Hz`;
     els.hoseSquishyVal.textContent = `${els.hoseSquishy.value}%`;
     els.squishyVal.textContent = `${els.squishyFeet.value}%`;
-    els.harmonicVal.textContent = `${els.harmonicRing.value}%`;
     
     updatePredictions();
     generateChartData();
@@ -447,8 +441,9 @@ function handleInputEvents(e) {
 const inputs = [
     els.damping, els.scv, 
     els.mass, els.yMass, els.printerSize, els.beltLength, els.beltType, els.beltTune, els.frameStiffness, els.driveType,
-    els.scaleX, els.axisToggle, els.twistX, els.twistY, els.twistZ, els.thStiff, els.bearingNoise, els.externalSway, els.swayFreq, els.hoseDrag, els.hoseDragFreq, els.hoseSquishy, els.squishyFeet, els.harmonicRing,
-    els.beltDiff, els.loosePart, els.racking
+    els.motorTorque, els.motorCurrent,
+    els.scaleX, els.axisToggle, els.twistX, els.twistY, els.twistZ, els.thStiff, els.externalSway, els.swayFreq, els.hoseDrag, els.hoseDragFreq, els.hoseSquishy, els.squishyFeet,
+    els.beltDiff, els.racking
 ];
 inputs.forEach(input => {
     if (input) {
@@ -471,10 +466,7 @@ function generateChartData() {
         cross_twist: viewAxis === 'x' ? parseFloat(els.twistY.value) : parseFloat(els.twistX.value),
         z_twist: parseFloat(els.twistZ.value),
         toolhead_stiffness: parseFloat(els.thStiff.value),
-        bearing_noise: parseFloat(els.bearingNoise.value),
-        harmonic_ring: parseFloat(els.harmonicRing.value),
         belt_tension_delta: parseFloat(els.beltDiff.value),
-        loose_component: parseFloat(els.loosePart.value),
         gantry_racking: parseFloat(els.racking.value),
         external_sway: parseFloat(els.externalSway.value),
         external_sway_freq: parseFloat(els.swayFreq.value),

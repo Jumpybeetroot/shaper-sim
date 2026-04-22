@@ -140,6 +140,29 @@
                         <span id="stiffness-val" style="margin-top: 4px;">1.0</span>
                     </div>
                 </div>
+
+                <details class="sub-category">
+                    <summary>Stepper Motors (A/B Drives)</summary>
+                    <div class="sub-category-content">
+                        <div class="control-group">
+                            <label for="motor-torque">Rated Holding Torque (mNm)</label>
+                            <input type="number" id="motor-torque" value="400" step="10">
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="motor-current">
+                                <span>Run Current & Compliance</span>
+                                <span id="motor-current-val" class="value-display">70%</span>
+                            </label>
+                            <input type="range" id="motor-current" min="10" max="100" step="1" value="70">
+                            <div class="tension-display" style="text-align: left; margin-top: 4px;">
+                                <span style="font-size: 11px; color: var(--text-secondary); line-height: 1.3;">
+                                    Scales holding torque down to realistic dynamic levels.
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </details>
                 
             </div>
             
@@ -181,13 +204,7 @@
                             <input type="range" id="toolhead-stiffness" min="0.5" max="2.5" step="0.1" value="1.0">
                         </div>
 
-                        <div class="control-group">
-                            <label for="loose-part">
-                                <span>Loose Hotend/Probe (Tuned Mass)</span>
-                                <span id="loose-part-val" class="value-display">0%</span>
-                            </label>
-                            <input type="range" id="loose-part" min="0" max="100" step="5" value="0">
-                        </div>
+
 
                         <div class="control-group">
                             <label for="gantry-racking">
@@ -210,21 +227,7 @@
                             <input type="range" id="belt-tension-diff" min="0" max="30" step="1" value="0">
                         </div>
 
-                        <div class="control-group">
-                            <label for="bearing-noise">
-                                <span>Bearing Noise Floor</span>
-                                <span id="noise-val" class="value-display">5%</span>
-                            </label>
-                            <input type="range" id="bearing-noise" min="0" max="100" step="1" value="5">
-                        </div>
-                        
-                        <div class="control-group">
-                            <label for="harmonic-ring">
-                                <span>Frame Harmonics</span>
-                                <span id="harmonic-val" class="value-display">0%</span>
-                            </label>
-                            <input type="range" id="harmonic-ring" min="0" max="100" step="5" value="0">
-                        </div>
+
                     </div>
                 </details>
 

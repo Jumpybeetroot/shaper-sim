@@ -187,7 +187,7 @@ function find_max_accel(shaper, scv, target_smoothing) {
 
 // --- Predictive Mechanical Model --- //
 
-function predict_resonance(mass_g, belt_EA, tension_N, frame_multiplier, belt_length_mm, drive_type = 2) {
+function predict_resonance(mass_g, belt_EA, tension_N, frame_multiplier, belt_length_mm, drive_type = 2, motor_torque_mNm = 400, motor_current_pct = 70, motor_step_angle = 50, pulley_teeth = 20) {
     // M = mass in kg
     let M = mass_g / 1000.0;
     let L = belt_length_mm / 1000.0;
@@ -213,8 +213,22 @@ function predict_resonance(mass_g, belt_EA, tension_N, frame_multiplier, belt_le
     // between acrylic (0.5^2 = 0.25) and thick aluminum plates (3.0^2 = 9.0) or solid CNC (5.0^2 = 25.0).
     let Kframe = 500000.0 * Math.pow(frame_multiplier, 2.0);
     
-    // Series stiffness: the frame and the belts both flex under load.
-    let Keff = 1.0 / (1.0 / Kbelt + 1.0 / Kframe);
+    // Motor Rotor Magnetic Spring Stiffness
+    // K_theta (Nm/rad) = Holding_Torque_Nm * Rotor_Teeth
+    // Run current and microstepping compliance reduces effective holding torque
+    let effective_torque_Nm = (motor_torque_mNm / 1000.0) * (motor_current_pct / 100.0);
+    let K_theta = effective_torque_Nm * motor_step_angle;
+    
+    // Convert torsional stiffness to linear stiffness at the belt: K_linear = K_theta / R^2
+    // R = pulley radius in meters. Pitch = 2mm.
+    let pulley_radius_m = (pulley_teeth * 2.0) / (2.0 * Math.PI) / 1000.0;
+    let Kmotor_single = K_theta / Math.pow(pulley_radius_m, 2);
+    
+    // CoreXY uses 2 motors in parallel. AWD uses 4.
+    let Kmotor_total = Kmotor_single * drive_type;
+    
+    // Series stiffness: the frame, belts, and motor rotors all flex under load.
+    let Keff = 1.0 / (1.0 / Kbelt + 1.0 / Kframe + 1.0 / Kmotor_total);
     
     // f = 1/(2pi) * sqrt(K/M)
     let f = (1.0 / (2.0 * Math.PI)) * Math.sqrt(Keff / M);
@@ -236,10 +250,7 @@ function generate_psd_curve(center_freq, freqs, imperfections = {}) {
         axis = 'x',
         toolhead_mass = 500,
         toolhead_twist = 0,
-        bearing_noise = 5,
-        harmonic_ring = 0,
         belt_tension_delta = 0,
-        loose_component = 0,
         gantry_racking = 0,
         external_sway = 0,
         external_sway_freq = 18.0,
@@ -348,15 +359,7 @@ function generate_psd_curve(center_freq, freqs, imperfections = {}) {
             val += peak2_amp / (1.0 + Math.pow((f - peak2_freq) / peak2_w, 2.0));
         }
 
-        // 4. Loose Toolhead Component (Tuned Mass Damper effect)
-        if (loose_component > 0) {
-            // Secondary component rings slightly offset from the main peak
-            const loose_freq = center_freq + 8.0; 
-            const loose_Q = Q * 2.5; // Rattles have very little damping
-            const loose_w = loose_freq / loose_Q;
-            const loose_amp = base_amplitude * (loose_component / 100.0) * 0.7;
-            val += loose_amp / (1.0 + Math.pow((f - loose_freq) / loose_w, 2.0));
-        }
+
 
         // 5. Gantry Racking (Y-Axis Asymmetry)
         if (gantry_racking > 0 && axis === 'y') {
@@ -367,26 +370,10 @@ function generate_psd_curve(center_freq, freqs, imperfections = {}) {
             val += racking_amp / (1.0 + Math.pow((f - racking_freq) / racking_w, 2.0));
         }
         
-        // 6. Frame Harmonic Ringing
-        if (harmonic_ring > 0) {
-            const h2_freq = center_freq * 2.0;
-            const h2_amp = base_amplitude * (harmonic_ring / 100.0) * 0.3;
-            val += h2_amp / (1.0 + Math.pow((f - h2_freq) / (w * 1.2), 2.0));
-            
-            const h3_freq = center_freq * 3.0;
-            const h3_amp = base_amplitude * (harmonic_ring / 100.0) * 0.15;
-            val += h3_amp / (1.0 + Math.pow((f - h3_freq) / (w * 1.5), 2.0));
-        }
+
         
-        // 7. Bearing Slop (Noise Floor)
-        if (bearing_noise > 0) {
-            // Noise spans all bins. If amplitude is too high, the integrated noise power
-            // overwhelms the resonance signal, instantly failing all shapers into 3HUMP_EI.
-            const noise_amp = base_amplitude * (bearing_noise / 100.0) * 0.005;
-            val += Math.random() * noise_amp;
-        } else {
-            val += Math.random() * (base_amplitude * 0.0001); // Minimal base noise
-        }
+        // Minimal base noise
+        val += Math.random() * (base_amplitude * 0.0001);
         
         return val;
     });
