@@ -553,11 +553,11 @@ function generateChartData() {
     chartInstance.update();
 }
 
-// Init
-window.addEventListener('DOMContentLoaded', () => {
-    try {
-        initChart();
-        handleInputEvents();
+window.addEventListener('load', () => {
+    document.fonts.ready.then(() => {
+        try {
+            initChart();
+            handleInputEvents();
         
         // --- Snapshots ---
         els.btnSnapshot.addEventListener('click', () => {
@@ -651,4 +651,5 @@ window.addEventListener('DOMContentLoaded', () => {
         console.error("Initialization error:", e);
         document.body.innerHTML += `<div style="position:fixed; top:0; left:0; right:0; background:red; color:white; padding:20px; z-index:9999;">Initialization Error: ${e.message}<br><pre>${e.stack}</pre></div>`;
     }
+    });
 });
