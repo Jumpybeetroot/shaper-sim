@@ -193,9 +193,10 @@ function predict_resonance(mass_g, belt_EA, tension_N, frame_multiplier, belt_le
     let L = belt_length_mm / 1000.0;
     
     // Non-linear belt stiffening: 
-    // Belts exhibit a higher elastic modulus under tension (Hooke's law breaks down slightly).
-    // Plus, higher tension eliminates backlash/slack. We model this as an empirical multiplier.
-    let stiffening_factor = 1.0 + (tension_N / 40.0); 
+    // Belts exhibit a higher elastic modulus under tension as slack is removed.
+    // However, there are significant diminishing returns once the belt is fully taut.
+    // We use an asymptotic function to cap the stiffening factor at ~2.5x original EA.
+    let stiffening_factor = 1.0 + (1.5 * (1.0 - Math.exp(-tension_N / 30.0))); 
     let effective_EA = belt_EA * stiffening_factor;
 
     // CoreXY Stiffness Model: Both A and B belts act in parallel.
