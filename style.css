@@ -72,6 +72,7 @@ body {
     letter-spacing: -0.5px;
     background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
@@ -107,8 +108,12 @@ details.control-section summary:hover h3 {
     color: var(--text-primary);
 }
 
+details.control-section:not([open]) {
+    padding-bottom: 0;
+}
+
 details.control-section:not([open]) h3 {
-    margin-bottom: 0;
+    margin-bottom: 24px; /* Move the padding to the margin of the h3 so it acts as bottom spacing */
 }
 
 details.control-section summary i.ph-caret-down {
@@ -178,6 +183,7 @@ details.sub-category summary::marker {
 /* Inputs */
 input[type="range"] {
     -webkit-appearance: none;
+    appearance: none;
     width: 100%;
     height: 4px;
     background: var(--bg-input);
@@ -195,9 +201,25 @@ input[type="range"]::-webkit-slider-thumb {
     cursor: pointer;
     box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
     transition: transform 0.1s;
+    border: none;
+}
+
+input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+    transition: transform 0.1s;
+    border: none;
 }
 
 input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+input[type="range"]::-moz-range-thumb:hover {
     transform: scale(1.2);
 }
 
