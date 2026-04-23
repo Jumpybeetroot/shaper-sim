@@ -16,6 +16,14 @@ In a 3D printer, the "spring" ($K_{total}$) is a combination of:
 
 The simulator treats these as springs in series. If any one spring is "soft" (e.g., low motor torque or loose belts), the total system stiffness drops significantly, lowering your resonance frequency.
 
+### Frame Stiffness Ratios (Area Moment of Inertia & Stressed-Skin)
+The simulator uses a multiplier from 0.5 to 10.0 to represent the mechanical rigidity of the chassis:
+*   **1.0 (Bare 2020 Extrusion):** The baseline reference.
+*   **2.0 - 3.0 (2020 + Structural Panels):** Bolting rigid panels (ACM, PC, or 3-5mm Aluminum) to the frame transforms the cubic truss into a shear web (monocoque). This prevents the "parallelogram" racking effect almost entirely, yielding a 2x-3x increase in stiffness.
+*   **4.0 (Bare 4040 Extrusion):** While a 4040 extrusion has an Area Moment of Inertia ($I$) 16 times greater than 2020, a 3D printer frame's racking stiffness is bottlenecked by the corner joints (bracket flex and fastener preload). Thus, an unpaneled 4040 frame yields roughly a 4x real-world stiffness multiplier.
+*   **6.0 - 7.0 (4040 + Structural Panels):** Combining the massive $I$ of 4040 with the stressed-skin effect of 3-5mm Aluminum side panels yields ultra-stiff systems (e.g., VzBot configurations).
+*   **8.5+ (CNC Billet / Industrial):** Thick solid plates or epoxy granite bases.
+
 ---
 
 ## 2. Belt Physics & Tension
