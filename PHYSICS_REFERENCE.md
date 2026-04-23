@@ -78,7 +78,7 @@ When you enable **"Speed Simulation"**, the simulator mathematically integrates 
 
 ---
 
-## 4. Klipper Shaper & PSD Math
+## 5. Klipper Shaper & PSD Math
 Once the baseline resonance frequency is predicted, the simulator ports Klipper's exact post-processing math to score the shapers.
 
 1.  **Power Spectral Density (PSD):** We generate a Lorentzian peak centered on our predicted frequency. The width of this peak is defined by the **Damping Ratio** (defaulting to `0.100` to match Klipper's reference frame). 

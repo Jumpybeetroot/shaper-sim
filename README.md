@@ -13,7 +13,9 @@ When tuning a 3D printer for ultra-high speeds, guessing the impact of a heavier
 ### Key Features
 
 *   **Real-World Component Database:** Select from a built-in database of popular stepper motors (e.g., LDO-42STH48, Kraken, Moons, Excit3D MaxMotor). The tool automatically applies the correct rotor inertia and holding torque to the simulation.
+*   **Stressed-Skin Frame Stiffness:** Models the structural difference between open space frames (bare extrusions) and stressed-skin monocoques (bolted aluminum panels), allowing you to predict how paneling upgrades improve rigidity.
 *   **Belt Stiffening Physics:** Accurately models the linear density (g/m) and elastic modulus of 6mm, 9mm, 10mm, and 12mm Gates GT2 belts.
+*   **Structural Damping Analysis:** Incorporates the inverse relationship between frame stiffness and damping ($\zeta$). Simulates how flexible frames (bare 2020) burn off ringing via joint friction (high damping), while ultra-rigid CNC frames "ring like a bell" (low damping).
 *   **Inertial Decoupling:** Correctly separates gantry mass from motor rotor inertia, essential for accurately modeling All-Wheel Drive (AWD) setups where the motor rotors add rotating mass but aren't carried by the belts.
 *   **Snapshot Mode (Ghost Graphs):** Take a snapshot of your current resonance curve to lock a "ghost" line on the graph. As you tweak parameters (like adding 100g to the toolhead), you can instantly compare the new curve against your baseline in real-time.
 
