@@ -23,10 +23,17 @@ const els = {
     frameStiffness: document.getElementById('frame-stiffness'),
     stiffnessVal: document.getElementById('stiffness-val'),
     driveType: document.getElementById('drive-type'),
+    motorPreset: document.getElementById('motor-preset'),
     motorTorque: document.getElementById('motor-torque'),
     motorInertia: document.getElementById('motor-inertia'),
     motorCurrent: document.getElementById('motor-current'),
     motorCurrentVal: document.getElementById('motor-current-val'),
+    
+    // Experimental Physics
+    enableDynamicSpeed: document.getElementById('enable-dynamic-speed'),
+    speedSliderGroup: document.getElementById('speed-slider-group'),
+    printSpeed: document.getElementById('print-speed'),
+    printSpeedVal: document.getElementById('print-speed-val'),
     
     // Imperfections
     twistX: document.getElementById('twist-x'),
@@ -253,12 +260,7 @@ function updatePredictions() {
     const motorCurrent = parseFloat(els.motorCurrent.value);
     const motorInertia = parseFloat(els.motorInertia.value);
     
-    // Defaulting to 1.8 degree (50) and 20T pulley (20)
-    const freqX = predict_resonance(mX, beltEA, tension, frame, beltLen, driveType, motorTorque, motorCurrent, 50, 20, motorInertia, beltDensity);
-    const freqY = predict_resonance(mY, beltEA, tension, frame, beltLen, driveType, motorTorque, motorCurrent, 50, 20, motorInertia, beltDensity);
-    
     // Simulate Klipper's ADXL Post-Processing
-    // We integrate up to the user-selected max frequency to support ultra-stiff AWD frames
     const max_hz = parseFloat(els.scaleX.value);
     const mathFreqs = [];
     for (let f = 1; f <= max_hz; f += 0.5) { mathFreqs.push(f); }
@@ -298,8 +300,47 @@ function updatePredictions() {
         damping_ratio: damping 
     };
     
-    const psdX = generate_psd_curve(freqX, mathFreqs, impX);
-    const psdY = generate_psd_curve(freqY, mathFreqs, impY);
+    // Helper to calculate PSD with optional acceleration smearing
+    const calculate_dynamic_psd = (mass, imp) => {
+        let nominalFreq = predict_resonance(mass, beltEA, tension, frame, beltLen, driveType, motorTorque, motorCurrent, 50, 20, motorInertia, beltDensity);
+        
+        if (els.enableDynamicSpeed && els.enableDynamicSpeed.checked) {
+            const targetSpeed = parseFloat(els.printSpeed.value);
+            const scv = parseFloat(els.scv.value);
+            
+            let integratedPsd = new Array(mathFreqs.length).fill(0);
+            const steps = 15; // Integrate across 15 speed steps from SCV up to target speed
+            
+            for (let i = 0; i < steps; i++) {
+                const currentSpeed = scv + (targetSpeed - scv) * (i / (steps - 1));
+                const torqueMultiplier = Math.exp(-currentSpeed / 430.0);
+                const dynamicTorque = motorTorque * torqueMultiplier;
+                
+                const stepFreq = predict_resonance(mass, beltEA, tension, frame, beltLen, driveType, dynamicTorque, motorCurrent, 50, 20, motorInertia, beltDensity);
+                const stepPsd = generate_psd_curve(stepFreq, mathFreqs, imp);
+                
+                for (let j = 0; j < mathFreqs.length; j++) {
+                    integratedPsd[j] += stepPsd[j] / steps;
+                }
+            }
+            return { freq: nominalFreq, psd: integratedPsd };
+        } else {
+            const psd = generate_psd_curve(nominalFreq, mathFreqs, imp);
+            return { freq: nominalFreq, psd: psd };
+        }
+    };
+    
+    const resX = calculate_dynamic_psd(mX, impX);
+    const resY = calculate_dynamic_psd(mY, impY);
+    
+    const freqX = resX.freq;
+    const freqY = resY.freq;
+    const psdX = resX.psd;
+    const psdY = resY.psd;
+    
+    // Store globally so the chart renderer doesn't have to recalculate
+    window.currentPsdX = psdX;
+    window.currentPsdY = psdY;
     
     const klipperTargetSmoothing = 0.12;
     
@@ -440,6 +481,18 @@ function handleInputEvents(e) {
     els.hoseSquishyVal.textContent = `${els.hoseSquishy.value}%`;
     els.squishyVal.textContent = `${els.squishyFeet.value}%`;
     
+    // Experimental Physics
+    if (els.enableDynamicSpeed && els.speedSliderGroup && els.printSpeedVal && els.printSpeed) {
+        if (els.enableDynamicSpeed.checked) {
+            els.speedSliderGroup.style.opacity = '1';
+            els.speedSliderGroup.style.pointerEvents = 'auto';
+        } else {
+            els.speedSliderGroup.style.opacity = '0.5';
+            els.speedSliderGroup.style.pointerEvents = 'none';
+        }
+        els.printSpeedVal.textContent = `${els.printSpeed.value} mm/s`;
+    }
+    
     updatePredictions();
     generateChartData();
 }
@@ -450,13 +503,35 @@ const inputs = [
     els.mass, els.yMass, els.printerSize, els.beltLength, els.beltType, els.beltTune, els.frameStiffness, els.driveType,
     els.motorTorque, els.motorInertia, els.motorCurrent,
     els.scaleX, els.axisToggle, els.twistX, els.twistY, els.twistZ, els.thStiff, els.externalSway, els.swayFreq, els.hoseDrag, els.hoseDragFreq, els.hoseSquishy, els.squishyFeet,
-    els.beltDiff, els.racking
+    els.beltDiff, els.racking,
+    els.enableDynamicSpeed, els.printSpeed
 ];
 inputs.forEach(input => {
     if (input) {
         input.addEventListener('input', handleInputEvents);
     }
 });
+
+const motorPresets = {
+    'ldo-48': { torque: 550, inertia: 84.5 },
+    'ldo-40': { torque: 450, inertia: 54.0 },
+    'ldo-kraken': { torque: 800, inertia: 138.0 },
+    'moons': { torque: 550, inertia: 82.0 },
+    'stepperonline': { torque: 590, inertia: 82.0 },
+    'excit3d-max': { torque: 560, inertia: 82.0 }
+};
+
+els.motorPreset.addEventListener('change', (e) => {
+    const val = e.target.value;
+    if (val !== 'custom' && motorPresets[val]) {
+        els.motorTorque.value = motorPresets[val].torque;
+        els.motorInertia.value = motorPresets[val].inertia;
+        handleInputEvents(); // update UI and predictions
+    }
+});
+
+els.motorTorque.addEventListener('input', () => { els.motorPreset.value = 'custom'; });
+els.motorInertia.addEventListener('input', () => { els.motorPreset.value = 'custom'; });
 
 function generateChartData() {
     const viewAxis = els.axisToggle.value;
@@ -466,28 +541,10 @@ function generateChartData() {
     
     const targetFreq = viewAxis === 'x' ? freqX : freqY;
     
-    const imperfections = {
-        axis: viewAxis,
-        toolhead_mass: viewAxis === 'x' ? parseFloat(els.mass.value) : parseFloat(els.mass.value) + parseFloat(els.yMass.value),
-        toolhead_twist: viewAxis === 'x' ? parseFloat(els.twistX.value) : parseFloat(els.twistY.value),
-        cross_twist: viewAxis === 'x' ? parseFloat(els.twistY.value) : parseFloat(els.twistX.value),
-        z_twist: parseFloat(els.twistZ.value),
-        toolhead_stiffness: parseFloat(els.thStiff.value),
-        belt_tension_delta: parseFloat(els.beltDiff.value),
-        gantry_racking: parseFloat(els.racking.value),
-        external_sway: parseFloat(els.externalSway.value),
-        external_sway_freq: parseFloat(els.swayFreq.value),
-        hose_drag: parseFloat(els.hoseDrag.value),
-        hose_drag_freq: parseFloat(els.hoseDragFreq.value),
-        hose_squishy: parseFloat(els.hoseSquishy.value),
-        squishy_materials: parseFloat(els.squishyFeet.value),
-        damping_ratio: parseFloat(els.damping.value)
-    };
-
     const mathFreqs = [];
     for (let f = 1; f <= parseFloat(els.scaleX.value); f += 0.5) { mathFreqs.push(f); }
     
-    const psd = generate_psd_curve(targetFreq, mathFreqs, imperfections);
+    const psd = viewAxis === 'x' ? window.currentPsdX : window.currentPsdY;
     
     // Globally save current raw psd to be captured by snapshot button
     window.currentRawPsd = psd;

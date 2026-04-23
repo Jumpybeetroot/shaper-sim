@@ -146,6 +146,18 @@
                     <summary>Stepper Motors (A/B Drives)</summary>
                     <div class="sub-category-content">
                         <div class="control-group">
+                            <label for="motor-preset">Motor Preset</label>
+                            <select id="motor-preset">
+                                <option value="custom">Custom...</option>
+                                <option value="ldo-48" selected>LDO-42STH48-2504AC</option>
+                                <option value="ldo-40">LDO-42STH40-1684AC</option>
+                                <option value="ldo-kraken">LDO-42STH60-3004HA (Kraken)</option>
+                                <option value="moons">Moons MS17HD6P4200</option>
+                                <option value="stepperonline">StepperOnline 17HS19</option>
+                                <option value="excit3d-max">Excit3D MaxMotor</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
                             <label for="motor-torque">Rated Holding Torque (mNm)</label>
                             <input type="number" id="motor-torque" value="550" step="10">
                         </div>
@@ -164,6 +176,29 @@
                             <div class="tension-display" style="text-align: left; margin-top: 4px;">
                                 <span style="font-size: 11px; color: var(--text-secondary); line-height: 1.3;">
                                     Scales holding torque. Models magnetic saturation diminishing returns above 100%.
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+
+                <details class="sub-category">
+                    <summary>Experimental Physics (Advanced)</summary>
+                    <div class="sub-category-content">
+                        <div class="control-group" style="flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px;">
+                            <input type="checkbox" id="enable-dynamic-speed" style="width: auto; cursor: pointer;">
+                            <label for="enable-dynamic-speed" style="margin-bottom: 0; cursor: pointer;">Enable Speed Simulation</label>
+                        </div>
+                        
+                        <div class="control-group" id="speed-slider-group" style="opacity: 0.5; pointer-events: none; transition: opacity 0.2s;">
+                            <label for="print-speed">
+                                <span>Print Speed (mm/s)</span>
+                                <span id="print-speed-val" class="value-display">100 mm/s</span>
+                            </label>
+                            <input type="range" id="print-speed" min="0" max="1000" step="10" value="100">
+                            <div class="tension-display" style="text-align: left; margin-top: 4px;">
+                                <span style="font-size: 11px; color: var(--text-secondary); line-height: 1.3;">
+                                    Models Back-EMF torque loss and <b>Acceleration Smear</b>. Ringing begins at low speeds (corners) where torque is high, and decays as the printer accelerates and torque drops. This integrates multiple speeds to generate a widened, "smeared" resonance band, showing why static Input Shapers struggle at high speeds.
                                 </span>
                             </div>
                         </div>
