@@ -47,7 +47,17 @@ Where:
 
 ---
 
-## 3. Motor Physics & Magnetic Springs
+## 3. Structural Damping Ratio ($\zeta$)
+In Klipper's `[input_shaper]` configuration, you can adjust `damping_ratio_x` and `damping_ratio_y` (which default to `0.1`). Damping is the measure of how quickly mechanical vibrations decay into heat.
+
+Counter-intuitively, the structural damping ratio often moves inversely to frame stiffness:
+*   **0.10 - 0.15 (High Damping):** Flexible "bare" frames or panels mounted with VHB foam tape. Flexible frames micro-slip at the corner joints, which burns off vibrational energy via friction. VHB tape acts as a viscoelastic damper, soaking up ringing.
+*   **0.07 - 0.10 (Standard):** A typical 3D printer frame with tightly bolted aluminum components.
+*   **0.04 - 0.07 (Low Damping):** Ultra-rigid CNC billet frames or fully bolted monocoques. Because solid aluminum has very little internal damping and the frame is too rigid to micro-slip, it will "ring like a bell" for a longer duration. These frames require Klipper's input shaper to do more heavy lifting to cancel out the sustained ringing.
+
+---
+
+## 4. Motor Physics & Magnetic Springs
 Stepper motors don't lock rigidly. The rotor is held in place by a magnetic field, which acts exactly like a torsional spring. 
 
 $$K_{magnetic} \approx \frac{Holding Torque \times Current \%}{Step Angle}$$
