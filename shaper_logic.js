@@ -1,17 +1,18 @@
 /**
  * Kalico Input Shaper Simulator Logic
- * 
+ *
  * ATTRIBUTION NOTICE:
- * The mathematical models for evaluating Input Shapers, calculating frequency 
- * responses, and calculating remaining vibrations are direct Javascript ports 
+ * The mathematical models for evaluating Input Shapers, calculating frequency
+ * responses, and calculating remaining vibrations are direct Javascript ports
  * of the logic found in Klipper3d's 'shaper_calibrate.py' and 'shaper_defs.py'.
- * 
+ *
  * Klipper3d is licensed under the GNU GPLv3 license.
- * Original Source: https://github.com/Klipper3d/klipper
+ * Original source: https://github.com/Klipper3d/klipper (klippy/extras/)
  */
 
 const SHAPER_VIBRATION_REDUCTION = 20.0;
 const DEFAULT_DAMPING_RATIO = 0.1;
+const KLIPPER_TARGET_SMOOTHING = 0.12;
 
 // --- Shaper Generators --- //
 
@@ -99,7 +100,7 @@ function get_3hump_ei_shaper(shaper_freq, damping_ratio) {
         [1.99960, -0.28231, 0.61536, 5.40450]
     ];
     let a = [
-        [0.11275, 0.76632, 3.29160, -1.44380], // Fixed missing comma from Klipper source 3.29160 - 1.44380
+        [0.11275, 0.76632, 3.29160, -1.44380],
         [0.23698, 0.61164, -2.57850, 4.85220],
         [0.30008, -0.19062, -2.14560, 0.13744],
         [0.23775, -0.73297, 0.46885, -2.08650],
@@ -109,63 +110,52 @@ function get_3hump_ei_shaper(shaper_freq, damping_ratio) {
 }
 
 // --- Smoothing and Accel Math --- //
-
-function get_shaper_offset(A, T) {
-    if (A.length === 0) return 0.0;
-    let sum_at = 0.0;
-    let sum_a = 0.0;
-    for (let i = 0; i < A.length; i++) {
-        sum_at += A[i] * T[i];
-        sum_a += A[i];
-    }
-    return sum_at / sum_a;
-}
+// Ported verbatim from Klipper's ShaperCalibrate._get_shaper_smoothing,
+// ._bisect, and .find_shaper_max_accel (klippy/extras/shaper_calibrate.py).
 
 function get_shaper_smoothing(shaper, accel = 5000, scv = 5.0) {
-    let half_accel = accel * 0.5;
-    let { A, T } = shaper;
-    let sum_A = A.reduce((a, b) => a + b, 0);
-    let inv_D = 1.0 / sum_A;
-    let n = T.length;
-    let ts = get_shaper_offset(A, T);
+    const { A, T } = shaper;
+    const half_accel = accel * 0.5;
 
-    let offset_90_x = 0.0;
-    let offset_90_y = 0.0;
+    let sum_A = 0.0;
+    for (let i = 0; i < A.length; i++) sum_A += A[i];
+    const inv_D = 1.0 / sum_A;
+    const n = T.length;
+
+    let ts = 0.0;
+    for (let i = 0; i < n; i++) ts += A[i] * T[i];
+    ts *= inv_D;
+
+    let offset_90 = 0.0;
     let offset_180 = 0.0;
-
     for (let i = 0; i < n; i++) {
+        const dt = T[i] - ts;
         if (T[i] >= ts) {
-            offset_90_x += (A[i] * (scv + half_accel * (T[i] - ts)) * (T[i] - ts));
-        } else {
-            offset_90_y += (A[i] * (scv - half_accel * (T[i] - ts)) * (T[i] - ts));
+            offset_90 += A[i] * (scv + half_accel * dt) * dt;
         }
-        offset_180 += A[i] * half_accel * Math.pow(T[i] - ts, 2);
+        offset_180 += A[i] * half_accel * dt * dt;
     }
-    
-    let offset_90 = inv_D * Math.sqrt(Math.pow(offset_90_x, 2) + Math.pow(offset_90_y, 2));
+    offset_90 *= inv_D * Math.SQRT2;
     offset_180 *= inv_D;
-    
-    return Math.max(offset_90, Math.abs(offset_180));
+    return Math.max(offset_90, offset_180);
 }
 
-function bisect(func, eps = 1e-8) {
+function _bisect(func) {
     let left = 1.0;
     let right = 1.0;
-    if (!func(eps)) return 0.0;
-    
+    if (!func(1e-9)) return 0.0;
+
     while (!func(left)) {
         right = left;
         left *= 0.5;
     }
-    
     if (right === left) {
         while (func(right)) {
             right *= 2.0;
         }
     }
-    
-    while (right - left > eps) {
-        let middle = (left + right) * 0.5;
+    while (right - left > 1e-8) {
+        const middle = (left + right) * 0.5;
         if (func(middle)) {
             left = middle;
         } else {
@@ -175,14 +165,10 @@ function bisect(func, eps = 1e-8) {
     return left;
 }
 
-function find_max_accel(shaper, scv, target_smoothing) {
-    // Binary search for accel where smoothing is <= target_smoothing
-    let max_accel = bisect(
-        (test_accel) => get_shaper_smoothing(shaper, test_accel, scv) <= target_smoothing,
-        1e-2
+function find_shaper_max_accel(shaper, scv) {
+    return _bisect(
+        (test_accel) => get_shaper_smoothing(shaper, test_accel, scv) <= KLIPPER_TARGET_SMOOTHING
     );
-    // Round to nearest 100 like klipper does
-    return Math.round(max_accel / 100.0) * 100.0;
 }
 
 // --- Predictive Mechanical Model --- //
@@ -393,45 +379,58 @@ function generate_psd_curve(center_freq, freqs, imperfections = {}) {
             const racking_w = racking_freq / Q;
             val += racking_amp / (1.0 + Math.pow((f - racking_freq) / racking_w, 2.0));
         }
-        
-
-        
-        // Minimal base noise
-        val += Math.random() * (base_amplitude * 0.0001);
-        
         return val;
     });
 }
 
-function get_shaper_response(shaper, freqs) {
-    // Calculates the frequency response magnitude |H(f)| of the shaper
-    let { A, T } = shaper;
-    let inv_D = 1.0 / A.reduce((a, b) => a + b, 0);
-    
-    return freqs.map(f => {
-        let sum_cos = 0.0;
-        let sum_sin = 0.0;
-        let omega = 2.0 * Math.PI * f;
-        
-        for (let i = 0; i < A.length; i++) {
-            sum_cos += A[i] * Math.cos(omega * T[i]);
-            sum_sin += A[i] * Math.sin(omega * T[i]);
+// Ported from Klipper's ShaperCalibrate._estimate_shaper.
+// Returns the shaper magnitude response |H(f)| evaluated against a test
+// damping ratio. The impulse sequence is damping-weighted
+// (W_i = A_i * exp(-damping * (T_last - T_i))) and frequency is the
+// damped natural frequency omega_d = omega * sqrt(1 - dr^2).
+function estimate_shaper(shaper, test_damping_ratio, freqs) {
+    const { A, T } = shaper;
+    const n = A.length;
+    let sum_A = 0.0;
+    for (let i = 0; i < n; i++) sum_A += A[i];
+    const inv_D = 1.0 / sum_A;
+    const T_last = T[n - 1];
+    const df = Math.sqrt(1.0 - test_damping_ratio * test_damping_ratio);
+
+    const out = new Float64Array(freqs.length);
+    for (let k = 0; k < freqs.length; k++) {
+        const omega = 2.0 * Math.PI * freqs[k];
+        const damping = test_damping_ratio * omega;
+        const omega_d = omega * df;
+        let S = 0.0;
+        let C = 0.0;
+        for (let i = 0; i < n; i++) {
+            const w = A[i] * Math.exp(-damping * (T_last - T[i]));
+            S += w * Math.sin(omega_d * T[i]);
+            C += w * Math.cos(omega_d * T[i]);
         }
-        
-        let magnitude = inv_D * Math.sqrt(sum_cos * sum_cos + sum_sin * sum_sin);
-        return magnitude * magnitude; // Power attenuation is magnitude squared
-    });
+        out[k] = Math.sqrt(S * S + C * C) * inv_D;
+    }
+    return out;
 }
 
-function calculate_remaining_vibrations(raw_psd, shaper_response) {
-    let sum_raw = 0;
-    let sum_shaped = 0;
-    
-    for (let i = 0; i < raw_psd.length; i++) {
-        sum_raw += raw_psd[i];
-        sum_shaped += raw_psd[i] * shaper_response[i];
+// Ported from Klipper's ShaperCalibrate._estimate_remaining_vibrations.
+// Returns { fraction, vals } where `fraction` is in [0, 1]; callers that
+// want a percentage should multiply by 100 at the display site.
+function estimate_remaining_vibrations(shaper, test_damping_ratio, freqs, psd) {
+    const vals = estimate_shaper(shaper, test_damping_ratio, freqs);
+    let psd_max = 0.0;
+    for (let i = 0; i < psd.length; i++) if (psd[i] > psd_max) psd_max = psd[i];
+    const vibr_threshold = psd_max / SHAPER_VIBRATION_REDUCTION;
+
+    let remaining = 0.0;
+    let all_vib = 0.0;
+    for (let i = 0; i < psd.length; i++) {
+        const r = vals[i] * psd[i] - vibr_threshold;
+        if (r > 0) remaining += r;
+        const a = psd[i] - vibr_threshold;
+        if (a > 0) all_vib += a;
     }
-    
-    if (sum_raw === 0) return 0.0;
-    return (sum_shaped / sum_raw) * 100.0; // Return as percentage
+    const fraction = all_vib > 0 ? remaining / all_vib : 0.0;
+    return { fraction, vals };
 }

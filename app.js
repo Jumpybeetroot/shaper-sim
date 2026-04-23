@@ -342,64 +342,62 @@ function updatePredictions() {
     window.currentPsdX = psdX;
     window.currentPsdY = psdY;
     
-    const klipperTargetSmoothing = 0.12;
-    
     const scoreShapers = (axisFreq, rawPsd) => {
         let best_shaper = null;
         let best_score = -1;
         let results = {};
-        
-        for (let s in shaperNames) {
+
+        for (const s of Object.keys(shaperNames)) {
             let best_f = axisFreq;
             let best_shaper_score = -1;
-            let min_shaper_vib = 1000;
+            let min_shaper_vib_pct = 1000;
             let best_shaper_accel = 0;
-            
+
             // Sweep frequencies up to the chosen max_hz
             for (let f_test = 10; f_test <= max_hz; f_test += 1.0) {
-                let shaper = SHAPERS[s](f_test, damping);
-                let response = get_shaper_response(shaper, mathFreqs);
-                let vibrations = calculate_remaining_vibrations(rawPsd, response);
-                let max_accel = find_max_accel(shaper, scv, klipperTargetSmoothing);
-                
-                if (vibrations <= 5.0) {
+                const shaper = SHAPERS[s](f_test, damping);
+                const { fraction } = estimate_remaining_vibrations(shaper, damping, mathFreqs, rawPsd);
+                const vibrations_pct = fraction * 100.0;
+                const max_accel = find_shaper_max_accel(shaper, scv);
+
+                if (vibrations_pct <= 5.0) {
                     if (max_accel > best_shaper_score) {
                         best_shaper_score = max_accel;
                         best_f = f_test;
-                        min_shaper_vib = vibrations;
+                        min_shaper_vib_pct = vibrations_pct;
                         best_shaper_accel = max_accel;
                     }
-                } else if (best_shaper_score === -1 && vibrations < min_shaper_vib) {
+                } else if (best_shaper_score === -1 && vibrations_pct < min_shaper_vib_pct) {
                     // Fallback track lowest vibrations if none pass
-                    min_shaper_vib = vibrations;
+                    min_shaper_vib_pct = vibrations_pct;
                     best_f = f_test;
                     best_shaper_accel = max_accel;
                 }
             }
-            
+
             // Calculate final smoothing for the best chosen frequency
-            let final_shaper = SHAPERS[s](best_f, damping);
-            let smoothing = get_shaper_smoothing(final_shaper, 5000, scv);
-            
-            results[s] = { 
-                max_accel: best_shaper_accel, 
-                vibrations: min_shaper_vib, 
+            const final_shaper = SHAPERS[s](best_f, damping);
+            const smoothing = get_shaper_smoothing(final_shaper, 5000, scv);
+
+            results[s] = {
+                max_accel: best_shaper_accel,
+                vibrations: min_shaper_vib_pct,
                 smoothing: smoothing,
                 freq: best_f
             };
-            
-            if (min_shaper_vib <= 5.0) { // Klipper rejects shapers that leave >5% vibrations
+
+            if (min_shaper_vib_pct <= 5.0) { // Klipper rejects shapers that leave >5% vibrations
                 if (best_shaper_accel > best_score) {
                     best_score = best_shaper_accel;
                     best_shaper = s;
                 }
             }
         }
-        
+
         // Fallback: if all fail 5% threshold, pick the one with lowest vibrations
         if (!best_shaper) {
             let min_vib = 1000;
-            for (let s in results) {
+            for (const s of Object.keys(results)) {
                 if (results[s].vibrations < min_vib) {
                     min_vib = results[s].vibrations;
                     best_shaper = s;
@@ -408,6 +406,9 @@ function updatePredictions() {
         }
         return { results, best_shaper };
     };
+
+    // Klipper rounds the reported max_accel to the nearest 100 at display time only.
+    const displayAccel = (a) => Math.round(a / 100.0) * 100.0;
     
     const scoreX = scoreShapers(freqX, psdX);
     const scoreY = scoreShapers(freqY, psdY);
@@ -419,8 +420,8 @@ function updatePredictions() {
     window.bestShaperX = scoreX.best_shaper;
     window.bestShaperY = scoreY.best_shaper;
     
-    els.predX.textContent = `Predicted X: ${freqX.toFixed(1)} Hz (Max Accel: ${recX.max_accel} mm/s² | Smoothing ~${recX.smoothing.toFixed(3)})`;
-    els.predY.textContent = `Predicted Y: ${freqY.toFixed(1)} Hz (Max Accel: ${recY.max_accel} mm/s² | Smoothing ~${recY.smoothing.toFixed(3)})`;
+    els.predX.textContent = `Predicted X: ${freqX.toFixed(1)} Hz (Max Accel: ${displayAccel(recX.max_accel)} mm/s² | Smoothing ~${recX.smoothing.toFixed(3)})`;
+    els.predY.textContent = `Predicted Y: ${freqY.toFixed(1)} Hz (Max Accel: ${displayAccel(recY.max_accel)} mm/s² | Smoothing ~${recY.smoothing.toFixed(3)})`;
     
     els.predX.dataset.val = freqX;
     els.predY.dataset.val = freqY;
@@ -428,20 +429,20 @@ function updatePredictions() {
     // Generate Simulated Klipper Console Output
     let out = `Calculating shaper recommendations based on predicted ADXL PSD physics...\n\n`;
     out += `========== X AXIS (${freqX.toFixed(1)} Hz) ==========\n`;
-    for (let s in shaperNames) {
-        let r = scoreX.results[s];
+    for (const s of Object.keys(shaperNames)) {
+        const r = scoreX.results[s];
         out += `Fitted shaper '${s}' frequency = ${r.freq.toFixed(1)} Hz (vibrations = ${r.vibrations.toFixed(1)}%, smoothing ~= ${r.smoothing.toFixed(3)})\n`;
-        out += `To avoid too much smoothing with '${s}', suggested max_accel <= ${r.max_accel} mm/sec^2\n`;
+        out += `To avoid too much smoothing with '${s}', suggested max_accel <= ${displayAccel(r.max_accel)} mm/sec^2\n`;
     }
-    out += `\nRecommended shaper is ${scoreX.best_shaper} @ ${recX.freq.toFixed(1)} Hz (Max Accel: ${recX.max_accel} mm/s²)\n\n`;
+    out += `\nRecommended shaper is ${scoreX.best_shaper} @ ${recX.freq.toFixed(1)} Hz (Max Accel: ${displayAccel(recX.max_accel)} mm/s²)\n\n`;
 
     out += `========== Y AXIS (${freqY.toFixed(1)} Hz) ==========\n`;
-    for (let s in shaperNames) {
-        let r = scoreY.results[s];
+    for (const s of Object.keys(shaperNames)) {
+        const r = scoreY.results[s];
         out += `Fitted shaper '${s}' frequency = ${r.freq.toFixed(1)} Hz (vibrations = ${r.vibrations.toFixed(1)}%, smoothing ~= ${r.smoothing.toFixed(3)})\n`;
-        out += `To avoid too much smoothing with '${s}', suggested max_accel <= ${r.max_accel} mm/sec^2\n`;
+        out += `To avoid too much smoothing with '${s}', suggested max_accel <= ${displayAccel(r.max_accel)} mm/sec^2\n`;
     }
-    out += `\nRecommended shaper is ${scoreY.best_shaper} @ ${recY.freq.toFixed(1)} Hz (Max Accel: ${recY.max_accel} mm/s²)\n`;
+    out += `\nRecommended shaper is ${scoreY.best_shaper} @ ${recY.freq.toFixed(1)} Hz (Max Accel: ${displayAccel(recY.max_accel)} mm/s²)\n`;
     
     els.klipperConsole.textContent = out;
 }
@@ -586,8 +587,8 @@ function generateChartData() {
     
     Object.keys(SHAPERS).forEach(shaper_name => {
         const shaper_func = SHAPERS[shaper_name];
-        const shaper = shaper_func(targetFreq, currentDamping); 
-        const response = get_shaper_response(shaper, mathFreqs);
+        const shaper = shaper_func(targetFreq, currentDamping);
+        const response = estimate_shaper(shaper, currentDamping, mathFreqs);
         const smoothed_psd = psd.map((val, i) => val * response[i]);
         
         datasets.push({
