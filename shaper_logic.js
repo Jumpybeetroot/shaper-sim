@@ -187,7 +187,7 @@ function find_max_accel(shaper, scv, target_smoothing) {
 
 // --- Predictive Mechanical Model --- //
 
-function predict_resonance(mass_g, belt_EA, tension_N, frame_multiplier, belt_length_mm, drive_type = 2, motor_torque_mNm = 400, motor_current_pct = 70, motor_step_angle = 50, pulley_teeth = 20) {
+function predict_resonance(mass_g, belt_EA, tension_N, frame_multiplier, belt_length_mm, drive_type = 2, motor_torque_mNm = 550, motor_current_pct = 70, motor_rotor_teeth = 50, pulley_teeth = 20, motor_inertia_g_cm2 = 84.5, belt_density_kg_m = 0.0012) {
     // M = mass in kg
     let M = mass_g / 1000.0;
     let L = belt_length_mm / 1000.0;
@@ -195,8 +195,10 @@ function predict_resonance(mass_g, belt_EA, tension_N, frame_multiplier, belt_le
     // Non-linear belt stiffening: 
     // Belts exhibit a higher elastic modulus under tension as slack is removed.
     // However, there are significant diminishing returns once the belt is fully taut.
-    // We use an asymptotic function to cap the stiffening factor at ~2.5x original EA.
-    let stiffening_factor = 1.0 + (1.5 * (1.0 - Math.exp(-tension_N / 30.0))); 
+    // We scale the "tautness" threshold based on belt width (a wider belt needs more tension to pull all its cords tight).
+    let width_mm = belt_EA / 2000.0;
+    let tension_knee = 5.0 * width_mm; // 30N for 6mm, 45N for 9mm, 60N for 12mm
+    let stiffening_factor = 1.0 + (1.5 * (1.0 - Math.exp(-tension_N / tension_knee))); 
     let effective_EA = belt_EA * stiffening_factor;
 
     // CoreXY Stiffness Model: Both A and B belts act in parallel.
@@ -216,8 +218,15 @@ function predict_resonance(mass_g, belt_EA, tension_N, frame_multiplier, belt_le
     // Motor Rotor Magnetic Spring Stiffness
     // K_theta (Nm/rad) = Holding_Torque_Nm * Rotor_Teeth
     // Run current and microstepping compliance reduces effective holding torque
-    let effective_torque_Nm = (motor_torque_mNm / 1000.0) * (motor_current_pct / 100.0);
-    let K_theta = effective_torque_Nm * motor_step_angle;
+    // Overdriving past 100% hits magnetic saturation with diminishing returns
+    let current_ratio = motor_current_pct / 100.0;
+    let saturation_factor = current_ratio;
+    if (current_ratio > 1.0) {
+        // Asymptotic curve: limits max torque gain to +50% no matter how much current is pushed
+        saturation_factor = 1.0 + 0.5 * (1.0 - Math.exp(-2.0 * (current_ratio - 1.0)));
+    }
+    let effective_torque_Nm = (motor_torque_mNm / 1000.0) * saturation_factor;
+    let K_theta = effective_torque_Nm * motor_rotor_teeth;
     
     // Convert torsional stiffness to linear stiffness at the belt: K_linear = K_theta / R^2
     // R = pulley radius in meters. Pitch = 2mm.
@@ -229,6 +238,21 @@ function predict_resonance(mass_g, belt_EA, tension_N, frame_multiplier, belt_le
     
     // Series stiffness: the frame, belts, and motor rotors all flex under load.
     let Keff = 1.0 / (1.0 / Kbelt + 1.0 / Kframe + 1.0 / Kmotor_total);
+    
+    // Dynamic Mass Additions
+    // 1. Motor Rotor Inertia
+    let J_kg_m2 = motor_inertia_g_cm2 * 1e-7;
+    let Mrotor_single = J_kg_m2 / Math.pow(pulley_radius_m, 2);
+    let Mrotor_total = Mrotor_single * drive_type;
+    
+    // 2. Belt Mass
+    let Mbelt_total = belt_density_kg_m * (L / 2.0) * (1.0 / 3.0);
+    
+    // Decouple rotor mass: because it sits behind the stretchy belt spring, the toolhead 
+    // doesn't "feel" the full mass of the rotors during high-frequency resonance.
+    // We apply an empirical coupling factor (e.g., 15%) to prevent the 1-DOF math from collapsing.
+    let inertial_coupling_factor = 0.15;
+    M = M + (Mrotor_total * inertial_coupling_factor) + Mbelt_total;
     
     // f = 1/(2pi) * sqrt(K/M)
     let f = (1.0 / (2.0 * Math.PI)) * Math.sqrt(Keff / M);

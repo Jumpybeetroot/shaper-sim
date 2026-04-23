@@ -24,6 +24,7 @@ const els = {
     stiffnessVal: document.getElementById('stiffness-val'),
     driveType: document.getElementById('drive-type'),
     motorTorque: document.getElementById('motor-torque'),
+    motorInertia: document.getElementById('motor-inertia'),
     motorCurrent: document.getElementById('motor-current'),
     motorCurrentVal: document.getElementById('motor-current-val'),
     
@@ -235,20 +236,26 @@ function updatePredictions() {
     const scv = parseFloat(els.scv.value);
     const damping = parseFloat(els.damping.value);
     
+    // Real-world Gates GT2 belt densities (approx 1.4 g/m per mm width)
+    let beltDensity = 0.0084; // default 6mm (8.4 g/m)
+    if (beltEA === 18000) beltDensity = 0.0126; // 9mm
+    else if (beltEA === 20000) beltDensity = 0.0140; // 10mm
+    else if (beltEA === 25000) beltDensity = 0.0168; // 12mm
+    
     const hz = parseFloat(els.beltTune.value);
     const span_m = 0.15;
-    const width_mm = beltEA / 2000.0; 
-    const rho = width_mm * 0.002;
+    const rho = beltDensity;
     const tension = 4 * rho * Math.pow(span_m, 2) * Math.pow(hz, 2);
     
     els.tensionVal.textContent = `${hz} Hz (~${tension.toFixed(1)} N)`;
     
     const motorTorque = parseFloat(els.motorTorque.value);
     const motorCurrent = parseFloat(els.motorCurrent.value);
+    const motorInertia = parseFloat(els.motorInertia.value);
     
     // Defaulting to 1.8 degree (50) and 20T pulley (20)
-    const freqX = predict_resonance(mX, beltEA, tension, frame, beltLen, driveType, motorTorque, motorCurrent, 50, 20);
-    const freqY = predict_resonance(mY, beltEA, tension, frame, beltLen, driveType, motorTorque, motorCurrent, 50, 20);
+    const freqX = predict_resonance(mX, beltEA, tension, frame, beltLen, driveType, motorTorque, motorCurrent, 50, 20, motorInertia, beltDensity);
+    const freqY = predict_resonance(mY, beltEA, tension, frame, beltLen, driveType, motorTorque, motorCurrent, 50, 20, motorInertia, beltDensity);
     
     // Simulate Klipper's ADXL Post-Processing
     // We integrate up to the user-selected max frequency to support ultra-stiff AWD frames
@@ -441,7 +448,7 @@ function handleInputEvents(e) {
 const inputs = [
     els.damping, els.scv, 
     els.mass, els.yMass, els.printerSize, els.beltLength, els.beltType, els.beltTune, els.frameStiffness, els.driveType,
-    els.motorTorque, els.motorCurrent,
+    els.motorTorque, els.motorInertia, els.motorCurrent,
     els.scaleX, els.axisToggle, els.twistX, els.twistY, els.twistZ, els.thStiff, els.externalSway, els.swayFreq, els.hoseDrag, els.hoseDragFreq, els.hoseSquishy, els.squishyFeet,
     els.beltDiff, els.racking
 ];
