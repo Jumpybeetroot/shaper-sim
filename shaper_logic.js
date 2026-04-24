@@ -183,11 +183,17 @@ function predict_resonance(mass_g, belt_EA, tension_N, frame_multiplier, belt_le
     // However, there are significant diminishing returns once the belt is fully taut.
     // We scale the "tautness" threshold based on belt width (a wider belt needs more tension to pull all its cords tight).
     let width_mm = belt_EA / 2000.0;
-    let tension_knee = 5.0 * width_mm; // 30N for 6mm, 45N for 9mm, 60N for 12mm
-    let stiffening_factor = 1.0 + (1.5 * (1.0 - Math.exp(-tension_N / tension_knee))); 
+    // Stiffening ceiling: 1 + 1.1 = 2.1× max
+    // Wang et al., Robotics 2018, 7(4):75, doi:10.3390/robotics7040075 Table 1:
+    // Initial tangent stiffness ~937 N/mm/strain → operational ~2014 N/mm/strain = 2.15× ratio
+    // Knee tightened to reflect stiffening completing early in load range
+    let tension_knee = 3.0 * width_mm; // 18N for 6mm — stiffening mostly done by here
+    let stiffening_factor = 1.0 + (1.1 * (1.0 - Math.exp(-tension_N / tension_knee))); 
     let effective_EA = belt_EA * stiffening_factor;
 
     // CoreXY Stiffness Model: Both A and B belts act in parallel.
+    // NOTE: The factor of 8 correctly assumes that L (belt_length_mm) represents the full loop length of a single belt.
+    // For AWD, the same L assumption applies before the *= 2.0 doubling.
     let Kbelt = (8.0 * effective_EA) / L; 
     
     // If AWD (drive_type == 4), the maximum unsupported belt length is halved, doubling the stiffness
@@ -232,7 +238,7 @@ function predict_resonance(mass_g, belt_EA, tension_N, frame_multiplier, belt_le
     let Mrotor_total = Mrotor_single * drive_type;
     
     // 2. Belt Mass
-    let Mbelt_total = belt_density_kg_m * (L / 2.0) * (1.0 / 3.0);
+    let Mbelt_total = belt_density_kg_m * L * (1.0 / 3.0);
     
     // Decouple rotor mass: because it sits behind the stretchy belt spring, the toolhead 
     // doesn't "feel" the full mass of the rotors during high-frequency resonance.
@@ -276,12 +282,14 @@ function generate_psd_curve(center_freq, freqs, imperfections = {}) {
     // Also extract cross_twist safely, defaulting to 0 if missing
     const cross_twist = imperfections.cross_twist || 0;
 
-    const base_amplitude = 1e5;
+    // Scale base amplitude to ensure comparable remaining vibration scores across different damping ratios
+    const base_amplitude = 1e5 * Math.pow(1.0 / (2.0 * damping_ratio), 2);
     
     // Q factor based on damping ratio. Default damping 0.1 -> Q=5
     // Lower damping = sharper, taller peak
     const Q = 1.0 / (2.0 * damping_ratio);
-    const w = center_freq / Q; 
+    // HWHM of the Lorentzian |H(ω)|² near resonance is ζ·f_n, not 2ζ·f_n.
+    const w = center_freq * damping_ratio;
     
     return freqs.map(f => {
         let val = 0;
@@ -381,6 +389,49 @@ function generate_psd_curve(center_freq, freqs, imperfections = {}) {
         }
         return val;
     });
+}
+
+// --- Time Domain Simulation --- //
+
+function _evaluate_step(t, wn, wd, damping_ratio, z_over_sqrt) {
+    if (t < 0) return 0.0;
+    const envelope = Math.exp(-damping_ratio * wn * t);
+    const osc = Math.cos(wd * t) + z_over_sqrt * Math.sin(wd * t);
+    return 1.0 - envelope * osc;
+}
+
+function generate_step_responses(center_freq, damping_ratio, shaper, t_max = 0.250, dt = 0.0005) {
+    const wn = 2.0 * Math.PI * center_freq;
+    // Prevent NaN if damping > 1 (though normally < 0.2 in 3d printers)
+    const dr = Math.min(damping_ratio, 0.999);
+    const wd = wn * Math.sqrt(1.0 - dr * dr);
+    const z_over_sqrt = dr / Math.sqrt(1.0 - dr * dr);
+    
+    let sum_A = 0.0;
+    if (shaper && shaper.A) {
+        for (let j = 0; j < shaper.A.length; j++) sum_A += shaper.A[j];
+    }
+    
+    const times = [];
+    const unshaped = [];
+    const shaped = [];
+    
+    for (let t = 0; t <= t_max; t += dt) {
+        times.push(t);
+        unshaped.push(_evaluate_step(t, wn, wd, dr, z_over_sqrt));
+        
+        let y_shaped = 0;
+        if (shaper && shaper.A && shaper.T && sum_A > 0) {
+            for (let j = 0; j < shaper.A.length; j++) {
+                y_shaped += (shaper.A[j] / sum_A) * _evaluate_step(t - shaper.T[j], wn, wd, dr, z_over_sqrt);
+            }
+        } else {
+            y_shaped = unshaped[unshaped.length - 1]; // Fallback
+        }
+        shaped.push(y_shaped);
+    }
+    
+    return { times, unshaped, shaped };
 }
 
 // Ported from Klipper's ShaperCalibrate._estimate_shaper.

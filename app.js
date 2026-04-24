@@ -1,9 +1,10 @@
 // App Logic & UI Binding
 
 let chartInstance = null;
-let snapshotDataX = null;
-let snapshotDataY = null;
-let snapshotMathFreqs = null;
+// Snapshot captures full context so A/B comparison is unambiguous:
+// { psd, shapedPsd, mathFreqs, damping, targetFreq, shaperName }
+let snapshotX = null;
+let snapshotY = null;
 
 // UI Elements
 const els = {
@@ -63,6 +64,7 @@ const els = {
     
     scaleX: document.getElementById('scale-x'),
     axisToggle: document.getElementById('axis-toggle'),
+    graphMode: document.getElementById('graph-mode'),
     
     predX: document.getElementById('pred-x'),
     predY: document.getElementById('pred-y'),
@@ -176,6 +178,9 @@ function initChart() {
                 const xAxis = chart.scales.x;
                 const yAxis = chart.scales.y;
                 
+                const isStepMode = els.graphMode && els.graphMode.value === 'step';
+                if (isStepMode) return; // Don't draw frequency markers on time chart
+                
                 const drawLine = (val, color, text) => {
                     const maxX = parseFloat(els.scaleX.value) || 100;
                     if (val < 1 || val > maxX) return;
@@ -225,8 +230,15 @@ function initChart() {
                     drawLine(predY, '#00f0ff', 'Pred Y');
                 }
                 
-                // Draw Klipper Vibration Threshold (approx 5% of 1e5 base amplitude)
-                drawHorizontalLine(5000, 'rgba(255, 60, 60, 0.6)', 'Vibration Threshold');
+                // Draw Klipper Vibration Threshold (max PSD / 20)
+                let maxPsd = 0;
+                if (window.currentRawPsd) {
+                    for (let i = 0; i < window.currentRawPsd.length; i++) {
+                        if (window.currentRawPsd[i] > maxPsd) maxPsd = window.currentRawPsd[i];
+                    }
+                }
+                const threshold = maxPsd > 0 ? maxPsd / 20.0 : 5000;
+                drawHorizontalLine(threshold, 'rgba(255, 60, 60, 0.6)', 'Vibration Threshold');
             }
         }]
     });
@@ -513,6 +525,9 @@ inputs.forEach(input => {
     }
 });
 
+if (els.axisToggle) els.axisToggle.addEventListener('change', generateChartData);
+if (els.graphMode) els.graphMode.addEventListener('change', generateChartData);
+
 const motorPresets = {
     'ldo-48': { torque: 550, inertia: 84.5 },
     'ldo-40': { torque: 450, inertia: 54.0 },
@@ -536,77 +551,149 @@ els.motorInertia.addEventListener('input', () => { els.motorPreset.value = 'cust
 
 function generateChartData() {
     const viewAxis = els.axisToggle.value;
+    const isStepMode = els.graphMode && els.graphMode.value === 'step';
     
     const freqX = parseFloat(els.predX.dataset.val);
     const freqY = parseFloat(els.predY.dataset.val);
-    
     const targetFreq = viewAxis === 'x' ? freqX : freqY;
-    
-    const mathFreqs = [];
-    for (let f = 1; f <= parseFloat(els.scaleX.value); f += 0.5) { mathFreqs.push(f); }
-    
-    const psd = viewAxis === 'x' ? window.currentPsdX : window.currentPsdY;
-    
-    // Globally save current raw psd to be captured by snapshot button
-    window.currentRawPsd = psd;
-    window.currentMathFreqs = mathFreqs;
+    const currentDamping = parseFloat(els.damping.value);
+    const recommendedShaper = viewAxis === 'x' ? window.bestShaperX : window.bestShaperY;
     
     const datasets = [];
     
-    // Add Snapshot Dataset if exists
-    const snapshotData = viewAxis === 'x' ? snapshotDataX : snapshotDataY;
-    if (snapshotData && snapshotMathFreqs) {
-        datasets.push({
-            label: 'Snapshot PSD',
-            data: snapshotMathFreqs.map((f, i) => ({x: f, y: snapshotData[i]})),
-            borderColor: 'rgba(255, 255, 255, 0.3)',
-            borderWidth: 2,
-            borderDash: [5, 5],
-            fill: true,
-            backgroundColor: 'rgba(255, 255, 255, 0.02)',
-            pointRadius: 0,
-            pointHoverRadius: 0,
-            tension: 0.4
-        });
-    }
-
-    datasets.push({
-        label: 'Raw PSD',
-        data: mathFreqs.map((f, i) => ({x: f, y: psd[i]})),
-        borderColor: '#ffffff',
-        borderWidth: 2,
-        fill: true,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        pointRadius: 0,
-        pointHoverRadius: 6,
-        tension: 0.4
-    });
-    
-    const recommendedShaper = viewAxis === 'x' ? window.bestShaperX : window.bestShaperY;
-    const currentDamping = parseFloat(els.damping.value);
-    
-    Object.keys(SHAPERS).forEach(shaper_name => {
-        const shaper_func = SHAPERS[shaper_name];
-        const shaper = shaper_func(targetFreq, currentDamping);
-        const response = estimate_shaper(shaper, currentDamping, mathFreqs);
-        const smoothed_psd = psd.map((val, i) => val * response[i]);
+    if (isStepMode) {
+        // --- TIME DOMAIN (STEP RESPONSE) ---
+        chartInstance.options.scales.x.title.text = 'Time (ms)';
+        chartInstance.options.scales.y.title.text = 'Position (Step Response)';
+        chartInstance.options.scales.y.ticks.callback = function(value) { return value.toFixed(2); };
+        
+        // Let chart.js handle Y max dynamically based on overshoot
+        delete chartInstance.options.scales.y.max;
+        
+        const activeShaperName = recommendedShaper; // Default to best, or could use a selected one
+        const shaper_func = SHAPERS[activeShaperName];
+        const shaper = shaper_func ? shaper_func(targetFreq, currentDamping) : null;
+        
+        const { times, unshaped, shaped } = generate_step_responses(targetFreq, currentDamping, shaper, 0.250, 0.0005);
+        
+        const labels = times.map(t => (t * 1000).toFixed(1)); // ms
         
         datasets.push({
-            label: shaperNames[shaper_name] || shaper_name,
-            data: mathFreqs.map((f, i) => ({x: f, y: smoothed_psd[i]})),
-            borderColor: colors[shaper_name] || '#888',
-            borderWidth: 1.5,
+            label: 'Unshaped Step Response',
+            data: labels.map((l, i) => ({x: l, y: unshaped[i]})),
+            borderColor: '#ffffff',
+            borderWidth: 2,
             borderDash: [5, 5],
+            fill: false,
             pointRadius: 0,
             pointHoverRadius: 6,
-            hidden: shaper_name !== recommendedShaper, 
+            tension: 0.1
+        });
+        
+        datasets.push({
+            label: `Shaped (${shaperNames[activeShaperName] || activeShaperName})`,
+            data: labels.map((l, i) => ({x: l, y: shaped[i]})),
+            borderColor: colors[activeShaperName] || '#00ff66',
+            borderWidth: 3,
+            fill: false,
+            pointRadius: 0,
+            pointHoverRadius: 6,
+            tension: 0.1
+        });
+        
+        chartInstance.data.labels = labels;
+        chartInstance.data.datasets = datasets;
+        
+        // For categorical scale, limit number of ticks
+        chartInstance.options.scales.x.ticks = {
+            maxTicksLimit: 20
+        };
+        
+    } else {
+        // --- FREQUENCY DOMAIN (PSD) ---
+        chartInstance.options.scales.x.title.text = 'Resonance Frequency (Hz)';
+        chartInstance.options.scales.y.title.text = 'Power spectral density';
+        chartInstance.options.scales.y.ticks.callback = function(value) { if (value === 0) return 0; return value.toExponential(1); };
+        
+        const mathFreqs = [];
+        for (let f = 1; f <= parseFloat(els.scaleX.value); f += 0.5) { mathFreqs.push(f); }
+        
+        const psd = viewAxis === 'x' ? window.currentPsdX : window.currentPsdY;
+        window.currentRawPsd = psd;
+        window.currentMathFreqs = mathFreqs;
+        
+        const snap = viewAxis === 'x' ? snapshotX : snapshotY;
+        if (snap) {
+            const tag = `ζ=${snap.damping.toFixed(3)}, ${snap.targetFreq.toFixed(1)} Hz`;
+            datasets.push({
+                label: `Snapshot raw (${tag})`,
+                data: snap.mathFreqs.map((f, i) => ({x: f, y: snap.psd[i]})),
+                borderColor: 'rgba(255, 255, 255, 0.3)',
+                borderWidth: 2,
+                borderDash: [5, 5],
+                fill: true,
+                backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                pointRadius: 0,
+                pointHoverRadius: 0,
+                tension: 0.4
+            });
+            if (snap.shapedPsd && snap.shaperName) {
+                const snapShaperDisplay = shaperNames[snap.shaperName] || snap.shaperName;
+                const snapShaperColor = colors[snap.shaperName] || '#888888';
+                datasets.push({
+                    label: `Snapshot ${snapShaperDisplay} (${tag})`,
+                    data: snap.mathFreqs.map((f, i) => ({x: f, y: snap.shapedPsd[i]})),
+                    borderColor: snapShaperColor,
+                    borderWidth: 1.5,
+                    borderDash: [2, 6],
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    tension: 0.4
+                });
+            }
+        }
+
+        datasets.push({
+            label: 'Raw PSD',
+            data: mathFreqs.map((f, i) => ({x: f, y: psd[i]})),
+            borderColor: '#ffffff',
+            borderWidth: 2,
+            fill: true,
+            backgroundColor: 'rgba(255, 255, 255, 0.05)',
+            pointRadius: 0,
+            pointHoverRadius: 6,
             tension: 0.4
         });
-    });
+        
+        Object.keys(SHAPERS).forEach(shaper_name => {
+            const shaper_func = SHAPERS[shaper_name];
+            const shaper = shaper_func(targetFreq, currentDamping);
+            const response = estimate_shaper(shaper, currentDamping, mathFreqs);
+            const smoothed_psd = psd.map((val, i) => val * response[i]);
+            
+            datasets.push({
+                label: shaperNames[shaper_name] || shaper_name,
+                data: mathFreqs.map((f, i) => ({x: f, y: smoothed_psd[i]})),
+                borderColor: colors[shaper_name] || '#888',
+                borderWidth: 1.5,
+                borderDash: [5, 5],
+                pointRadius: 0,
+                pointHoverRadius: 6,
+                hidden: shaper_name !== recommendedShaper, 
+                tension: 0.4
+            });
+        });
+        
+        chartInstance.data.labels = mathFreqs;
+        chartInstance.data.datasets = datasets;
+        chartInstance.options.scales.x.max = parseFloat(els.scaleX.value);
+        
+        // Reset tick limits
+        if (chartInstance.options.scales.x.ticks) {
+            delete chartInstance.options.scales.x.ticks.maxTicksLimit;
+        }
+    }
     
-    chartInstance.data.labels = mathFreqs;
-    chartInstance.data.datasets = datasets;
-    chartInstance.options.scales.x.max = parseFloat(els.scaleX.value);
     chartInstance.update();
 }
 
@@ -619,20 +706,32 @@ window.addEventListener('load', () => {
         // --- Snapshots ---
         els.btnSnapshot.addEventListener('click', () => {
             const viewAxis = els.axisToggle.value;
-            if (viewAxis === 'x') {
-                snapshotDataX = [...window.currentRawPsd];
-            } else {
-                snapshotDataY = [...window.currentRawPsd];
+            const rawPsd = [...window.currentRawPsd];
+            const mathFreqs = [...window.currentMathFreqs];
+            const damping = parseFloat(els.damping.value);
+            const targetFreq = parseFloat(
+                viewAxis === 'x' ? els.predX.dataset.val : els.predY.dataset.val
+            );
+            const shaperName = viewAxis === 'x' ? window.bestShaperX : window.bestShaperY;
+
+            let shapedPsd = null;
+            if (shaperName && SHAPERS[shaperName]) {
+                const shaper = SHAPERS[shaperName](targetFreq, damping);
+                const response = estimate_shaper(shaper, damping, mathFreqs);
+                shapedPsd = rawPsd.map((v, i) => v * response[i]);
             }
-            snapshotMathFreqs = [...window.currentMathFreqs];
+
+            const snap = { psd: rawPsd, shapedPsd, mathFreqs, damping, targetFreq, shaperName };
+            if (viewAxis === 'x') snapshotX = snap;
+            else snapshotY = snap;
+
             els.btnClearSnapshot.style.display = 'flex';
             updatePredictions();
         });
 
         els.btnClearSnapshot.addEventListener('click', () => {
-            snapshotDataX = null;
-            snapshotDataY = null;
-            snapshotMathFreqs = null;
+            snapshotX = null;
+            snapshotY = null;
             els.btnClearSnapshot.style.display = 'none';
             updatePredictions();
         });

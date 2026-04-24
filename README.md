@@ -17,7 +17,8 @@ When tuning a 3D printer for ultra-high speeds, guessing the impact of a heavier
 *   **Belt Stiffening Physics:** Accurately models the linear density (g/m) and elastic modulus of 6mm, 9mm, 10mm, and 12mm Gates GT2 belts.
 *   **Structural Damping Analysis:** Incorporates the inverse relationship between frame stiffness and damping ($\zeta$). Simulates how flexible frames (bare 2020) burn off ringing via joint friction (high damping), while ultra-rigid CNC frames "ring like a bell" (low damping).
 *   **Inertial Decoupling:** Correctly separates gantry mass from motor rotor inertia, essential for accurately modeling All-Wheel Drive (AWD) setups where the motor rotors add rotating mass but aren't carried by the belts.
-*   **Snapshot Mode (Ghost Graphs):** Take a snapshot of your current resonance curve to lock a "ghost" line on the graph. As you tweak parameters (like adding 100g to the toolhead), you can instantly compare the new curve against your baseline in real-time.
+*   **Time-Domain Step Response:** Switch the Graph Mode from PSD to Time-Domain to visualize the exact settling behavior of your printer. Watch a mathematical 2nd-order underdamped step response ring out and see exactly how the chosen input shaper sequence flatlines the vibration.
+*   **Snapshot Mode (Ghost Graphs):** Take a snapshot of your current resonance or step response curve to lock a "ghost" line on the graph. As you tweak parameters (like adding 100g to the toolhead), you can instantly compare the new curve against your baseline in real-time.
 
 ## Experimental Physics: Acceleration Smear
 

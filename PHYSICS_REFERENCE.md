@@ -86,4 +86,14 @@ Once the baseline resonance frequency is predicted, the simulator ports Klipper'
 3.  **Shaper Scoring:** The simulator tests Klipper's algorithms (ZV, MZV, EI, 2HUMP, 3HUMP). For each shaper, it convolves the shaper's response against the PSD curve. 
 4.  **The Goal:** It attempts to find the highest frequency that can push the remaining vibrations below Klipper's internal safety threshold ($\approx 5\%$ of the raw PSD amplitude), while keeping the injected Smoothing below $0.12$.
 
+## 6. Time Domain (Step Response)
+While Power Spectral Density is great for frequency analysis, humans visualize 3D printing artifacts in the time domain (ringing on the surface of a print).
+The simulator generates a classical 2nd-order underdamped Step Response:
+$$y(t) = 1 - e^{-\zeta \omega_n t} \left( \cos(\omega_d t) + \frac{\zeta}{\sqrt{1-\zeta^2}} \sin(\omega_d t) \right)$$
+Where $\omega_d = \omega_n \sqrt{1-\zeta^2}$ is the damped natural frequency. 
+
+To visualize Input Shaping, the simulator performs a discrete convolution. It takes the unshaped step response $y(t)$ and delays/scales it according to the selected shaper's impulse sequence (the $A_i$ amplitudes and $T_i$ timing delays). 
+$$y_{shaped}(t) = \sum \frac{A_i}{\sum A} \cdot y(t - T_i)$$
+This proves mathematically why higher damping ($\zeta$) physically settles faster, and how shapers perfectly flatline vibrations precisely when their delayed impulses fire.
+
 By merging true Newtonian mechanics with Klipper's exact Python filtering algorithms, this simulator allows you to virtually "bench test" hardware upgrades before purchasing them!

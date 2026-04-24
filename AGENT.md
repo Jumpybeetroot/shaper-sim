@@ -5,12 +5,12 @@ Hello, fellow AI coding assistant! If you are reading this, you are working on t
 ## 1. Tech Stack & Philosophy
 * **Pure Vanilla:** This project uses vanilla HTML, CSS, and JavaScript. 
 * **No Frameworks:** DO NOT introduce React, Vue, Svelte, TailwindCSS, or any build tools (Webpack/Vite). The app must be able to run by simply opening `index.html` in a browser.
-* **Math-Heavy Canvas Rendering:** The graphs (resonance curves, shaper transfer functions) are drawn manually using the HTML5 Canvas API in `app.js`.
+* **Chart.js Rendering:** The graphs (PSD curves, Step Responses) are drawn using the `Chart.js` library in `app.js`, wrapped dynamically around an HTML5 canvas.
 
 ## 2. Architecture
 The project logic is split between two core files:
-1. **`app.js` (UI & Graphics):** Handles DOM interactions, reads the UI sliders, sets up the Canvas elements, and orchestrates the rendering of the Bode plots (magnitude/phase graphs).
-2. **`shaper_logic.js` (Physics & Math):** Handles the mathematical modeling of the stepper motors (magnetic stiffness), belt tension, and the complex frequency-domain transfer functions of the Klipper input shapers (MZV, EI, etc.).
+1. **`app.js` (UI & Graphics):** Handles DOM interactions, reads the UI sliders, sets up `Chart.js`, and orchestrates the dynamic rendering of both Frequency (PSD) and Time (Step Response) plots via `generateChartData()`.
+2. **`shaper_logic.js` (Physics & Math):** Handles the mathematical modeling of the stepper motors (magnetic stiffness), belt tension, mechanical imperfection modeling, and the complex convolutions for Klipper input shapers.
 
 ## 3. Mathematical "Gotchas" (CRITICAL)
 
@@ -20,13 +20,23 @@ The physical model in `shaper_logic.js` is not a generic mass-spring system. It 
 * **Stepper Motor Stiffness** acts as a spring in series with the belts, calculated using holding torque, rotor radius, and microstepping compliance.
 * **Rule:** If you are modifying the resonant frequency predictions, you must respect the series-spring equation (`1/k_total = 1/k_belt + 1/k_motor`).
 
-### B. Input Shaper Transfer Functions
-The shaper algorithms (MZV, EI, 2HUMP_EI, 3HUMP_EI) are implemented by defining their impulse amplitudes and times, then computing the Discrete Time Fourier Transform (DTFT) magnitude across a frequency sweep. 
-* DO NOT arbitrarily change the impulse amplitudes or timings; they are strictly derived from the official Klipper mathematical derivations for vibration cancellation.
+### B. Input Shaper Transfer Functions & Normalization
+The shaper algorithms (ZV, MZV, EI, 2HUMP_EI, 3HUMP_EI) are implemented by defining their impulse amplitudes ($A_i$) and times ($T_i$).
+* **Frequency Domain:** We compute the discrete Fourier transform magnitude across a frequency sweep. Klipper's math scales these internally.
+* **Time Domain (CRITICAL):** When generating the step response in `generate_step_responses()`, you **MUST** normalize the impulse amplitudes by their sum (`A[j] / sum_A`). Because Klipper's raw $A_i$ coefficients sum to a value $> 1.0$ (e.g. $1.0 + K$ for ZV), failing to normalize will cause the position plot to settle at an incorrect value.
+
+### C. Resonance Peak (Lorentzian) Conventions
+The primary resonance in `generate_psd_curve()` is a Lorentzian with two hardcoded invariants that are easy to "fix" in the wrong direction:
+* **Width:** `w = center_freq * damping_ratio`. This is the HWHM (half-width at half-max) of $|H(\omega)|^2$ near resonance. An earlier `w = center_freq / Q` was FWHM — peaks were 2× too wide. Do **not** revert to `/Q`.
+* **Peak amplitude:** `base_amplitude` $\propto Q^2 = 1/(2\zeta)^2$ is correct because `TEST_RESONANCES` runs a **steady-state chirp**, not an impulse. Do **not** rescale to $1/\zeta$ under a "fixed-energy impulse" argument. Do **not** add $f^2$ / $f^4$ envelopes on top — Klipper's chirp balances those, so adding them makes plots less realistic, not more.
+* **Secondary peaks (twist, sway, hose, split, racking)** still compute width as `/Q`. Known inconsistency with the primary peak; their empirical multipliers (`1.5`, `0.345/broadening_factor`, etc.) were tuned against the old convention, so porting the HWHM fix requires re-tuning those constants.
+
+### D. Snapshot State Shape
+`snapshotX` / `snapshotY` in `app.js` store the full capture context: `{ psd, shapedPsd, mathFreqs, damping, targetFreq, shaperName }`. This is intentional — because peak PSD scales with $Q^2$, two bare PSD arrays captured at different damping ratios are not directly comparable. The legend label on snapshot datasets must show the captured parameters (`ζ=…, … Hz`) so A/B comparison is unambiguous. Don't reduce the snapshot back to a loose array.
 
 ## 4. Modifying the UI
 When adding new sliders to `index.html`:
 1. Add the `<input>` slider.
 2. Add the corresponding `<span>` for the value display.
-3. Map both elements in the `els` and `vals` objects at the top of `app.js`.
-4. Ensure `updateValues()` and the main `updateGraphs()` render loop are extracting the value properly.
+3. Map both elements in the `els` object at the top of `app.js`.
+4. Ensure `handleInputEvents()` updates the display span and triggers `generateChartData()` to update the graphs.
