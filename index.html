@@ -251,17 +251,7 @@
                                 </span>
                             </div>
                         </div>
-                    </div>
-                </details>
-                
-            </details>
-            
-            <details class="control-section">
-                <summary><h3>Mechanical Imperfections<i class="ph ph-caret-down ml-auto"></i></h3></summary>
-                
-                <details class="sub-category">
-                    <summary>Toolhead & Gantry Mass</summary>
-                    <div class="sub-category-content">
+
                         <div class="control-group">
                             <label for="twist-x">
                                 <span>X COM Offset (mm)</span>
@@ -293,16 +283,14 @@
                             </label>
                             <input type="range" id="toolhead-stiffness" min="0.5" max="2.5" step="0.1" value="1.0">
                         </div>
-
-                        <div class="control-group">
-                            <label for="gantry-racking">
-                                <span>Y-Axis Gantry Racking</span>
-                                <span id="racking-val" class="value-display">0%</span>
-                            </label>
-                            <input type="range" id="gantry-racking" min="0" max="100" step="5" value="0">
-                        </div>
                     </div>
                 </details>
+                
+            </details>
+            
+            <details class="control-section">
+                <summary><h3>Mechanical Imperfections<i class="ph ph-caret-down ml-auto"></i></h3></summary>
+                
 
                 <details class="sub-category">
                     <summary>Drive System & Frame</summary>
@@ -315,7 +303,13 @@
                             <input type="range" id="belt-tension-diff" min="0" max="30" step="1" value="0">
                         </div>
 
-
+                        <div class="control-group">
+                            <label for="gantry-racking">
+                                <span>Y-Axis Gantry Racking</span>
+                                <span id="racking-val" class="value-display">0%</span>
+                            </label>
+                            <input type="range" id="gantry-racking" min="0" max="100" step="5" value="0">
+                        </div>
                     </div>
                 </details>
 
