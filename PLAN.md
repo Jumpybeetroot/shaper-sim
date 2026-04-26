@@ -18,13 +18,13 @@ This document outlines the concise, step-by-step execution plan along with the e
     *   **Application:** Multiply every $Y$ value in the CSV dataset by $ScaleFactor$ before graphing to align peaks visually. Add a UI checkbox to toggle "Normalize Heights".
 4.  **[x] Chart Integration:** Update `initChart()` with `realDataX` and `realDataY` datasets (dashed lines, semi-transparent fills).
 
-## 2. Pre-Built Printer Profiles
+## 2. Pre-Built Printer Profiles [CANCELLED]
 
 ### Step-by-Step Implementation:
-1.  **Data Architecture:** Create `profiles.js` containing a `const PRINTER_PROFILES` database.
-2.  **UI Updates:** Populate the `#profile-select` element dynamically from the `PRINTER_PROFILES` dictionary.
-3.  **Application Logic:** On the `<select>` change event, iterate over the profile's keys to set the corresponding HTML slider `value`s, then call `updateSimulation()`.
-4.  **Custom Saves:** Attach a click listener to `#save-profile-btn` to serialize current slider values into a JSON object and push it to `localStorage.setItem('shaper_sim:custom_profiles')` (namespaced) with a `schema_version` field.
+1.  **[x] Data Architecture:** Create `profiles.js` containing a `const PRINTER_PROFILES` database. (Reverted)
+2.  **[x] UI Updates:** Populate the `#profile-select` element dynamically. (Reverted)
+3.  **[x] Application Logic:** (Reverted)
+4.  **[x] Custom Saves:** (Reverted)
 
 ## 3. Kinematic-Specific Coupling & Cross-Gantry
 
