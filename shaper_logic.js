@@ -200,9 +200,9 @@ function predict_resonance(mass_g, belt_EA, tension_N, frame_multiplier, belt_le
     // idler pulleys. In AWD, the front and rear motors rigidly anchor both ends of
     // the gantry belt segments, isolating them. The effective vibrating length drops
     // dramatically — the toolhead only stretches short, trapped segments between
-    // motor pairs. Empirically tuned to ~3x to match real-world AWD frequency scaling.
+    // motor pairs. Empirically tuned to ~2.8x to match real-world AWD frequency scaling.
     if (drive_type === 4) {
-        Kbelt *= 3.0;
+        Kbelt *= 2.8;
     }
     
     // Baseline frame/gantry stiffness.
@@ -246,11 +246,10 @@ function predict_resonance(mass_g, belt_EA, tension_N, frame_multiplier, belt_le
     
     // Decouple rotor mass: because the rotor sits behind the belt spring, the toolhead 
     // doesn't "feel" the full mass of the rotors during high-frequency resonance.
-    // Empirical coupling factor of ~15% prevents the 1-DOF approximation from
-    // over-counting rotor inertia. This is consistent across 2WD and AWD because
-    // the dominant decoupling comes from pulley tooth meshing compliance and motor
-    // mount elasticity, not belt span length.
-    let inertial_coupling_factor = 0.15;
+    // Empirical coupling factor (~15% for 2WD, ~10% for AWD) prevents the 
+    // 1-DOF approximation from over-counting rotor inertia. AWD is more 
+    // decoupled due to double belt loops and additional motor mount elasticity.
+    let inertial_coupling_factor = (drive_type === 4) ? 0.10 : 0.15;
     M = M + (Mrotor_total * inertial_coupling_factor) + Mbelt_total;
     
     // f = 1/(2pi) * sqrt(K/M)

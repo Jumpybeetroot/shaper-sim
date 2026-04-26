@@ -54,13 +54,13 @@ $$K_{belt,2WD} = \frac{8 \cdot EA}{L}$$
 
 Where $L$ is the total belt loop length and $EA$ is the tensile rigidity of the belt.
 
-**AWD (All-Wheel Drive CoreXY):** Motors are placed at all four corners. The front and rear motor pairs rigidly anchor both ends of each gantry belt segment. The toolhead can no longer stretch the full belt loop — it is trapped between motor pairs on short, isolated segments. This eliminates the long compliant idler paths entirely and produces roughly **3× the effective belt stiffness** of 2WD:
+**AWD (All-Wheel Drive CoreXY):** Motors are placed at all four corners. The front and rear motor pairs rigidly anchor both ends of each gantry belt segment, isolating them. The toolhead can no longer stretch the full belt loop — it is trapped between motor pairs on short, isolated segments. This eliminates the long compliant idler paths entirely and produces roughly **2.8× the effective belt stiffness** of 2WD:
 
-$$K_{belt,AWD} \approx 3 \times K_{belt,2WD}$$
+$$K_{belt,AWD} \approx 2.8 \times K_{belt,2WD}$$
 
 Additionally, AWD doubles the motor count from 2 to 4, which doubles the total magnetic spring stiffness ($K_{motor}$). Combined with the belt isolation effect, this produces a total system stiffness increase that yields **significantly higher resonance frequencies** — consistent with the 60-80% frequency gains observed on high-performance AWD builds.
 
-**Rotor Mass Decoupling:** The extra motor rotors do add physical mass to the vibrating system. However, because the rotor sits behind the belt spring (separated by pulley tooth meshing compliance and motor mount elasticity), the toolhead only "feels" approximately **15%** of each rotor's effective linear mass during high-frequency resonance. This low coupling factor is consistent across both 2WD and AWD configurations.
+**Rotor Mass Decoupling:** The extra motor rotors do add physical mass to the vibrating system. However, because the rotor sits behind the belt spring (separated by pulley tooth meshing compliance and motor mount elasticity), the toolhead only "feels" a fraction of each rotor's effective linear mass during high-frequency resonance. The simulator uses an empirical coupling factor of **15% for 2WD** and **10% for AWD** (which is more decoupled due to additional belt segments and mounts).
 
 ---
 
