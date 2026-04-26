@@ -1,0 +1,358 @@
+[
+  {
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "\"Add real ADXL CSV upload logic to index.html\"",
+      "Instruction": "\"Add drop-zone and normalization checkbox.\"",
+      "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":405,\"ReplacementContent\":\"                </div>\\n            </header>\\n            \\n            <div id=\\\"drop-zone\\\" class=\\\"drop-zone\\\">\\n                <p><i class=\\\"ph ph-upload-simple\\\"></i> Drag & Drop Klipper AD\n<truncated 1616 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\index.html\""
+    }
+  },
+  {
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": "false",
+      "Description": "\"Add CSS styles for drop zone.\"",
+      "EndLine": "377",
+      "Instruction": "\"Add drop-zone styling before chart-container\"",
+      "ReplacementContent": "\".drop-zone {\\n    border: 2px dashed rgba(0, 240, 255, 0.4);\\n    border-radius: 8px;\\n    padding: 16px;\\n    text-align: center;\\n    color: var(--text-secondary);\\n    margin-bottom: 16px;\\n    background: rgba(0, 240, 255, 0.03);\\n    transition: all \n<truncated 732 bytes>",
+      "StartLine": "364",
+      "TargetContent": "\".chart-container {\\n    background: var(--bg-panel);\\n    backdrop-filter: var(--glass-blur);\\n    -webkit-backdrop-filter: var(--glass-blur);\\n    border: 1px solid var(--border-color);\\n    border-radius: 12px;\\n    padding: 24px;\\n    aspect-ratio: 8 /\n<truncated 128 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\style.css\""
+    }
+  },
+  {
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "\"Integrate CSV parsing, drop zone events and charting in app.js\"",
+      "Instruction": "\"Add els for drop zone, event listeners, parseCSV, and chart integration.\"",
+      "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":226,\"ReplacementContent\":\"    btnSnapshot: document.getElementById('btn-snapshot'),\\n    btnClearSnapshot: document.getElementById('btn-clear-snapshot'),\\n    \\n    // CSV Upload\\n    dropZone: document.getElementById('dro\n<truncated 4919 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\app.js\""
+    }
+  },
+  {
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": "false",
+      "Description": "\"Fix chart scaling for PSD overlay by using linear x-axis to prevent frequency misalignment in category mode.\"",
+      "EndLine": "886",
+      "Instruction": "\"Change the Chart x-axis type to linear for the PSD mode and remove the labels assignment.\"",
+      "ReplacementContent": "\"        chartInstance.data.labels = []; // Clear labels to force linear plotting\\n        chartInstance.data.datasets = datasets;\\n        chartInstance.options.scales.x.max = parseFloat(els.scaleX.value);\\n\\n        // Force linear scale so real ADXL dat\n<truncated 316 bytes>",
+      "StartLine": "876",
+      "TargetContent": "\"        chartInstance.data.labels = mathFreqs;\\n        chartInstance.data.datasets = datasets;\\n        chartInstance.options.scales.x.max = parseFloat(els.scaleX.value);\\n\\n        // Revert to default scale type (category when labels are present)\\n    \n<truncated 222 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\app.js\""
+    }
+  },
+  {
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": "false",
+      "Description": "\"Mark Feature 1 as completed in TASKS.md\"",
+      "EndLine": "7",
+      "Instruction": "\"Mark Feature 1 and its subtasks as done\"",
+      "ReplacementContent": "\"- [x] Feature 1: Real ADXL Data Import (Digital Twin Tuning)\\n  - [x] Add drag-and-drop zone and file input UI for CSV.\\n  - [x] Implement CSV parsing logic for Klipper resonances.\\n  - [x] Implement data normalization logic to scale PSD heights.\\n  - [x]\n<truncated 48 bytes>",
+      "StartLine": "3",
+      "TargetContent": "\"- [ ] Feature 1: Real ADXL Data Import (Digital Twin Tuning)\\n  - [ ] Add drag-and-drop zone and file input UI for CSV.\\n  - [ ] Implement CSV parsing logic for Klipper resonances.\\n  - [ ] Implement data normalization logic to scale PSD heights.\\n  - [ ]\n<truncated 48 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\TASKS.md\""
+    }
+  },
+  {
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "\"Added ADXL Sensor Mounting sliders to control X, Y, and Z lever arm offsets independently from COM.\"",
+      "Instruction": "\"Add a new details section for \\\"ADXL Sensor Mounting\\\" inside the Mechanical Imperfections section. This will contain three range sliders for ADXL X, Y, and Z offsets with default values of 30mm.\"",
+      "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":284,\"ReplacementContent\":\"                    </div>\\n                </details>\\n\\n                <details class=\\\"sub-category\\\">\\n                    <summary>ADXL Sensor Mounting</summary>\\n                    <div cl\n<truncated 1857 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\index.html\"",
+      "waitForPreviousTools": "false"
+    }
+  },
+  {
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "\"Added ADXL Sensor Mounting sliders to control X, Y, and Z lever arm offsets independently from COM.\"",
+      "Instruction": "\"Add a new details section for \\\"ADXL Sensor Mounting\\\" inside the Mechanical Imperfections section. This will contain three range sliders for ADXL X, Y, and Z offsets with default values of 30mm.\"",
+      "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":288,\"ReplacementContent\":\"                            <input type=\\\"range\\\" id=\\\"gantry-racking\\\" min=\\\"0\\\" max=\\\"100\\\" step=\\\"5\\\" value=\\\"0\\\">\\n                        </div>\\n                    </div>\\n                <\n<truncated 2281 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\index.html\"",
+      "waitForPreviousTools": "false"
+    }
+  },
+  {
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "\"Updated simulation UI hooks to capture ADXL offset sliders and feed them into the generated physics PSD curve.\"",
+      "Instruction": "\"Add ADXL input fields to 'els', update their labels in 'updateInputLabels', and attach them to the 'impX' and 'impY' objects in 'updatePredictions'.\"",
+      "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":191,\"ReplacementContent\":\"    twistZ: document.getElementById('twist-z'),\\n    twistZVal: document.getElementById('twist-z-val'),\\n    adxlX: document.getElementById('adxl-x'),\\n    adxlXVal: document.getElementById('adxl-\n<truncated 2495 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\app.js\"",
+      "waitForPreviousTools": "false"
+    }
+  },
+  {
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "\"Decoupled ADXL measuring position from COM offset in the physics generator. Secondary resonance amplitudes now scale appropriately based on the ADXL lever arm.\"",
+      "Instruction": "\"Update 'generate_psd_curve' to accept 'adxl_x', 'adxl_y', and 'adxl_z'. Then, apply these factors to the amplitude calculations for 'toolhead_twist', 'cross_twist', and 'z_twist'.\"",
+      "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":280,\"ReplacementContent\":\"        z_twist = 0,\\n        adxl_x = 30,\\n        adxl_y = 30,\\n        adxl_z = 30,\\n        toolhead_stiffness = 1.0,\\n        hose_squishy = 0,\\n        squishy_materials = 0,\\n        dampin\n<truncated 5292 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\shaper_logic.js\"",
+      "waitForPreviousTools": "false"
+    }
+  },
+  {
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "\"Updated default ADXL offsets in UI to match standard Voron Stealthburner (X=0, Y=35, Z=45).\"",
+      "Instruction": "\"Update the ADXL X, Y, Z slider default values and text displays to 0, 35, and 45 respectively.\"",
+      "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":297,\"ReplacementContent\":\"                            <label for=\\\"adxl-x\\\">\\n                                <span>ADXL X Offset (mm)</span>\\n                                <span id=\\\"adxl-x-val\\\" class=\\\"value-display\\\"\n<truncated 2380 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\index.html\""
+    }
+  },
+  {
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": "false",
+      "Description": "\"Added adxlX, adxlY, and adxlZ UI elements to the inputs array to bind event listeners and properly trigger updates.\"",
+      "EndLine": "675",
+      "Instruction": "\"Add els.adxlX, els.adxlY, els.adxlZ to the inputs array.\"",
+      "ReplacementContent": "\"const inputs = [\\n    els.damping, els.scv, \\n    els.mass, els.yMass, els.printerSize, els.beltLength, els.beltType, els.beltTune, els.frameStiffness, els.driveType,\\n    els.motorTorque, els.motorInertia, els.motorCurrent,\\n    els.scaleX, els.axisToggl\n<truncated 263 bytes>",
+      "StartLine": "668",
+      "TargetContent": "\"const inputs = [\\n    els.damping, els.scv, \\n    els.mass, els.yMass, els.printerSize, els.beltLength, els.beltType, els.beltTune, els.frameStiffness, els.driveType,\\n    els.motorTorque, els.motorInertia, els.motorCurrent,\\n    els.scaleX, els.axisToggl\n<truncated 230 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\app.js\""
+    }
+  },
+  {
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": "false",
+      "Description": "\"Reworked the physics simulation for ADXL placement to correctly apply lever-arm 3D cross products. X-axis twist is now amplified by Y and Z offsets, and Y-axis twist by X and Z offsets.\"",
+      "EndLine": "350",
+      "Instruction": "\"Update twist calculations to correctly map angular acceleration to linear acceleration measured at the ADXL using 3D cross products, removing the bug where an ADXL centered on one axis zeroed out its twist peak.\"",
+      "ReplacementContent": "\"        // Calculate the effective ADXL lever arms for the current axis based on rigid body dynamics.\\n        // A twist in the toolhead means it rotates. Rotation creates linear acceleration \\n        // at the ADXL proportional to its distance from the\n<truncated 3495 bytes>",
+      "StartLine": "308",
+      "TargetContent": "\"        // 2. Secondary Resonance Peak (Toolhead Twist / COM Offset)\\n        if (toolhead_twist > 0) {\\n            // Torque and inertia both scale with mass. Since the primary peak is normalized \\n            // to a constant base_amplitude, mass cance\n<truncated 2297 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\shaper_logic.js\""
+    }
+  },
+  {
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": "false",
+      "Description": "\"Updated the HTML to rename 'ADXL Sensor Mounting' to 'Sensor & Nozzle Mounting', added a checkbox to show the nozzle difference, and added sliders for the nozzle offsets (initially hidden).\"",
+      "EndLine": "313",
+      "Instruction": "\"Replace the ADXL Sensor Mounting section with the new Sensor & Nozzle Mounting section that includes the ADXL vs Nozzle checkbox and Nozzle offset sliders.\"",
+      "ReplacementContent": "\"                <details class=\\\"sub-category\\\">\\n                    <summary>Sensor & Nozzle Mounting</summary>\\n                    <div class=\\\"sub-category-content\\\">\\n                        <div class=\\\"help-text small mb-2\\\">\\n                    \n<truncated 3953 bytes>",
+      "StartLine": "285",
+      "TargetContent": "\"                <details class=\\\"sub-category\\\">\\n                    <summary>ADXL Sensor Mounting</summary>\\n                    <div class=\\\"sub-category-content\\\">\\n                        <div class=\\\"help-text small mb-2\\\">\\n                        \n<truncated 1543 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\index.html\""
+    }
+  },
+  {
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "\"Updating app.js to handle nozzle offset inputs and calculate secondary PSD curves for the nozzle.\"",
+      "Instruction": "\"Add UI bindings for the new nozzle offset controls, calculate nozzle PSD curves if the show-nozzle-diff checkbox is checked, and update the chart rendering to display the nozzle PSD difference curve.\"",
+      "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":198,\"ReplacementContent\":\"    adxlX: document.getElementById('adxl-x'),\\n    adxlXVal: document.getElementById('adxl-x-val'),\\n    adxlY: document.getElementById('adxl-y'),\\n    adxlYVal: document.getElementById('adxl-y-va\n<truncated 5288 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\app.js\""
+    }
+  },
+  {
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": "false",
+      "Description": "\"Updating app.js to plot the nozzle PSD difference curve on the chart when requested.\"",
+      "EndLine": "880",
+      "Instruction": "\"Add the dataset for the nozzle PSD difference curve right after the Raw PSD dataset in the frequency domain section of generateChartData.\"",
+      "ReplacementContent": "\"        datasets.push({\\n            label: 'Raw ADXL PSD',\\n            data: mathFreqs.map((f, i) => ({x: f, y: psd[i]})),\\n            borderColor: '#ffffff',\\n            borderWidth: 2,\\n            fill: true,\\n            backgroundColor: 'rgba(255\n<truncated 873 bytes>",
+      "StartLine": "868",
+      "TargetContent": "\"        datasets.push({\\n            label: 'Raw PSD',\\n            data: mathFreqs.map((f, i) => ({x: f, y: psd[i]})),\\n            borderColor: '#ffffff',\\n            borderWidth: 2,\\n            fill: true,\\n            backgroundColor: 'rgba(255, 255\n<truncated 182 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\app.js\""
+    }
+  },
+  {
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "\"Reorganized UI by moving COM and ADXL/Nozzle offsets to the Experimental Physics section and Y-Axis Gantry Racking (along with Toolhead Material Stiffness) to the Drive System & Frame section.\"",
+      "Instruction": "\"Move the specific blocks corresponding to COM offsets and ADXL/Nozzle offsets from 'Mechanical Imperfections' into 'Experimental Physics (Advanced)'. Remove 'Toolhead & Gantry Mass' and 'Sensor & Nozzle Mounting' sections and move their remaining children\n<truncated 90 bytes>",
+      "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":233,\"ReplacementContent\":\"                <details class=\\\"sub-category\\\">\\n                    <summary>Experimental Physics (Advanced)</summary>\\n                    <div class=\\\"sub-category-content\\\">\\n                \n<truncated 18150 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\index.html\""
+    }
+  },
+  {
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "\"Moved 'Toolhead Material Stiffness' from 'Drive System & Frame' to 'Experimental Physics (Advanced)' section alongside COM offset and ADXL placement.\"",
+      "Instruction": "\"Move the 'toolhead-stiffness' control group from the 'Drive System & Frame' sub-category to the 'Experimental Physics (Advanced)' sub-category, specifically placing it just before the 'Center of Mass (COM) Offset' header.\"",
+      "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":233,\"ReplacementContent\":\"                        </div>\\n\\n                        <div class=\\\"control-group\\\">\\n                            <label for=\\\"toolhead-stiffness\\\">\\n                                <span>Toolh\n<truncated 1621 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\index.html\""
+    }
+  },
+  {
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": "false",
+      "Description": "\"Added checkbox to enable/disable toolhead offsets\"",
+      "EndLine": "235",
+      "Instruction": "\"Add a checkbox to enable/disable all the toolhead offsets above toolhead material stiffness.\"",
+      "ReplacementContent": "\"                        <div class=\\\"control-group checkbox-group\\\" style=\\\"margin-bottom: 15px;\\\">\\n                            <label for=\\\"enable-toolhead-offsets\\\" style=\\\"flex-direction: row; align-items: center; justify-content: flex-start; gap: 10p\n<truncated 365 bytes>",
+      "StartLine": "233",
+      "TargetContent": "\"                        <div class=\\\"control-group\\\">\\n                            <label for=\\\"toolhead-stiffness\\\">\"",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\index.html\""
+    }
+  },
+  {
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": "false",
+      "Description": "\"Add enableToolheadOffsets to UI elements in app.js\"",
+      "EndLine": "198",
+      "Instruction": "\"Add enableToolheadOffsets element to els object.\"",
+      "ReplacementContent": "\"    adxlZ: document.getElementById('adxl-z'),\\n    adxlZVal: document.getElementById('adxl-z-val'),\\n    \\n    enableToolheadOffsets: document.getElementById('enable-toolhead-offsets'),\\n    \\n    showNozzleDiff: document.getElementById('show-nozzle-diff'\n<truncated 3 bytes>",
+      "StartLine": "195",
+      "TargetContent": "\"    adxlZ: document.getElementById('adxl-z'),\\n    adxlZVal: document.getElementById('adxl-z-val'),\\n    \\n    showNozzleDiff: document.getElementById('show-nozzle-diff'),\"",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\app.js\""
+    }
+  },
+  {
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "\"Update app.js to use enable-toolhead-offsets checkbox for zeroing out twist and adxl offsets when disabled, and add it to the inputs array.\"",
+      "Instruction": "\"Update the `updatePredictions` function to zero out twist and adxl offsets if `enableToolheadOffsets` is unchecked. Also add `enableToolheadOffsets` to the `inputs` array.\"",
+      "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":490,\"ReplacementContent\":\"    let useOffsets = els.enableToolheadOffsets ? els.enableToolheadOffsets.checked : true;\\n    const tX = useOffsets ? parseFloat(els.twistX.value) : 0;\\n    const tY = useOffsets ? parseFloat(el\n<truncated 4897 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\app.js\""
+    }
+  },
+  {
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "\"Wrap toolhead offsets in a group div to toggle styling\"",
+      "Instruction": "\"Wrap the Center of Mass and ADXL placement sections inside a div with id `toolhead-offsets-group` so that it can be visually dimmed when disabled.\"",
+      "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":248,\"ReplacementContent\":\"                        <div id=\\\"toolhead-offsets-group\\\">\\n                            <div style=\\\"font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; marg\n<truncated 498 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\index.html\""
+    }
+  },
+  {
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "\"Add toolheadOffsetsGroup logic and fix profile saving for checkboxes\"",
+      "Instruction": "\"1. Add `toolheadOffsetsGroup` to `els`.\\n2. Add opacity toggling for `toolheadOffsetsGroup` in `updateInputLabels`.\\n3. Fix `saveProfile` and `loadProfile` to properly handle `.checked` for checkboxes instead of `.value`.\\n4. Add `els.showNozzleDiff` to t\n<truncated 50 bytes>",
+      "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":199,\"ReplacementContent\":\"    enableToolheadOffsets: document.getElementById('enable-toolhead-offsets'),\\n    toolheadOffsetsGroup: document.getElementById('toolhead-offsets-group'),\\n    \",\"StartLine\":198,\"TargetContent\":\n<truncated 2219 bytes>",
+      "TargetFile": "\"c:\\\\Users\\\\Beetroot\\\\.gemini\\\\antigravity\\\\scratch\\\\shaper-sim\\\\app.js\""
+    }
+  },
+  {
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "\"Set default toolhead, COM, ADXL, and nozzle offset values to match a typical StealthBurner setup, and adjust minimums for coordinate sliders to allow negative values.\"",
+      "Instruction": "\"Update the input sliders for twist, adxl, and nozzle offsets to have minimum -100 and set the values to typical Stealthburner defaults. Update toolhead-weight default to 430.\"",
+      "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":115,\"ReplacementContent\":\"                <div class=\\\"control-group\\\">\\n                    <label for=\\\"toolhead-weight\\\">Toolhead Weight (g)</label>\\n                    <input type=\\\"number\\\" id=\\\"toolhead-weight\\\" val\n<truncated 9465 bytes>",
+      "TargetFile": "\"c:/Users/Beetroot/.gemini/antigravity/scratch/shaper-sim/index.html\""
+    }
+  },
+  {
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "\"Update logic to use Math.abs() for twist inputs so that negative values successfully produce resonance peaks.\"",
+      "Instruction": "\"Update the if conditions and amplitude modifiers for toolhead_twist, cross_twist, and z_twist so that they use absolute values, allowing both positive and negative offsets to properly affect the PSD curve.\"",
+      "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":334,\"ReplacementContent\":\"        // 2. Secondary Resonance Peak (Toolhead Twist / COM Offset)\\n        if (toolhead_twist !== 0) {\\n            // Torque and inertia both scale with mass. Since the primary peak is normali\n<truncated 1556 bytes>",
+      "TargetFile": "\"c:/Users/Beetroot/.gemini/antigravity/scratch/shaper-sim/shaper_logic.js\""
+    }
+  },
+  {
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": "false",
+      "Description": "\"Add Advanced Coordinate Mapping feature to README\"",
+      "EndLine": "22",
+      "Instruction": "\"Add a bullet point in Key Features explaining the new coordinate mapping features\"",
+      "ReplacementContent": "\"*   **Time-Domain Step Response:** Switch the Graph Mode from PSD to Time-Domain to visualize the exact settling behavior of your printer. Watch a mathematical 2nd-order underdamped step response ring out and see exactly how the chosen input shaper sequen\n<truncated 601 bytes>",
+      "StartLine": "20",
+      "TargetContent": "\"*   **Time-Domain Step Response:** Switch the Graph Mode from PSD to Time-Domain to visualize the exact settling behavior of your printer. Watch a mathematical 2nd-order underdamped step response ring out and see exactly how the chosen input shaper sequen\n<truncated 307 bytes>",
+      "TargetFile": "\"c:/Users/Beetroot/.gemini/antigravity/scratch/shaper-sim/README.md\""
+    }
+  },
+  {
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": "false",
+      "Description": "\"Add Spatial Offsets and Asymmetry details to PHYSICS_REFERENCE\"",
+      "EndLine": "86",
+      "Instruction": "\"Update the Mechanical Imperfections bullet point to include the new coordinate offset physics\"",
+      "ReplacementContent": "\"1.  **Power Spectral Density (PSD):** We generate a Lorentzian peak centered on our predicted frequency. The width of this peak is defined by the **Damping Ratio** (defaulting to `0.100` to match Klipper's reference frame). \\n2.  **Mechanical Imperfection\n<truncated 747 bytes>",
+      "StartLine": "84",
+      "TargetContent": "\"1.  **Power Spectral Density (PSD):** We generate a Lorentzian peak centered on our predicted frequency. The width of this peak is defined by the **Damping Ratio** (defaulting to `0.100` to match Klipper's reference frame). \\n2.  **Mechanical Imperfection\n<truncated 408 bytes>",
+      "TargetFile": "\"c:/Users/Beetroot/.gemini/antigravity/scratch/shaper-sim/PHYSICS_REFERENCE.md\""
+    }
+  },
+  {
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": "false",
+      "Description": "\"Set enable-toolhead-offsets default to unchecked\"",
+      "EndLine": "237",
+      "Instruction": "\"Remove the checked attribute from the enable-toolhead-offsets checkbox\"",
+      "ReplacementContent": "\"                            <label for=\\\"enable-toolhead-offsets\\\" style=\\\"flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px;\\\">\\n                                <input type=\\\"checkbox\\\" id=\\\"enable-toolhead-offsets\\\">\\n    \n<truncated 103 bytes>",
+      "StartLine": "234",
+      "TargetContent": "\"                            <label for=\\\"enable-toolhead-offsets\\\" style=\\\"flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px;\\\">\\n                                <input type=\\\"checkbox\\\" id=\\\"enable-toolhead-offsets\\\" checke\n<truncated 111 bytes>",
+      "TargetFile": "\"c:/Users/Beetroot/.gemini/antigravity/scratch/shaper-sim/index.html\""
+    }
+  },
+  {
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "\"Coupled toolhead stiffness to the amplitude and damping (peak width) of secondary resonance peaks in the physics simulation.\"",
+      "Instruction": "\"Modify the amplitude and width calculations for the twist, cross-axis, and z-axis resonance peaks to be inversely proportional to toolhead_stiffness. This makes softer materials produce taller, wider peaks, while stiffer materials produce sharper, narrowe\n<truncated 9 bytes>",
+      "ReplacementChunks": "[{\"AllowMultiple\":false,\"EndLine\":343,\"ReplacementContent\":\"            // Amplitude ratio scales with BOTH the COM offset (driving force) and ADXL offset (measuring lever arm)\\n            // Lower stiffness increases the amplitude of the twist peak\\n    \n<truncated 1716 bytes>",
+      "TargetFile": "\"c:/Users/Beetroot/.gemini/antigravity/scratch/shaper-sim/shaper_logic.js\""
+    }
+  },
+  {
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": "false",
+      "Description": "\"Added documentation for the dynamic toolhead stiffness feature.\"",
+      "EndLine": "22",
+      "Instruction": "\"Add a new bullet point to the Key Features section detailing the dynamic toolhead stiffness feature and how it couples to amplitude, frequency, and damping of secondary peaks.\"",
+      "ReplacementContent": "\"*   **Advanced Coordinate Mapping:** Accurately model offset ADXL sensors, non-centered nozzle placements, and toolhead Center of Mass using full Cartesian coordinates (including negative offsets). Compare the difference between the ADXL's predicted graph\n<truncated 658 bytes>",
+      "StartLine": "21",
+      "TargetContent": "\"*   **Advanced Coordinate Mapping:** Accurately model offset ADXL sensors, non-centered nozzle placements, and toolhead Center of Mass using full Cartesian coordinates (including negative offsets). Compare the difference between the ADXL's predicted graph\n<truncated 317 bytes>",
+      "TargetFile": "\"c:/Users/Beetroot/.gemini/antigravity/scratch/shaper-sim/README.md\""
+    }
+  },
+  {
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": "false",
+      "Description": "\"Updated the PHYSICS_REFERENCE.md to document the mathematical coupling of toolhead stiffness to secondary peak amplitude and damping.\"",
+      "EndLine": "85",
+      "Instruction": "\"Update the 'Mechanical Imperfections & Spatial Offsets' bullet point to thoroughly explain how toolhead material stiffness mathematically couples with frequency, amplitude, and damping/bandwidth of secondary resonance peaks.\"",
+      "ReplacementContent": "\"2.  **Mechanical Imperfections, Spatial Offsets & Toolhead Stiffness:** Real ADXL graphs aren't perfect single spikes. The simulator injects secondary frequency harmonics into the PSD curve to mimic racking, drag, and asymmetric twisting based on spatial \n<truncated 979 bytes>",
+      "StartLine": "85",
+      "TargetContent": "\"2.  **Mechanical Imperfections & Spatial Offsets:** Real ADXL graphs aren't perfect single spikes. When you tweak sliders like \\\"Toolhead Twist,\\\" \\\"ADXL Offset,\\\" or \\\"Hose Drag,\\\" the simulator injects secondary frequency harmonics into the PSD curve to\n<truncated 350 bytes>",
+      "TargetFile": "\"c:/Users/Beetroot/.gemini/antigravity/scratch/shaper-sim/PHYSICS_REFERENCE.md\""
+    }
+  },
+  {
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": "false",
+      "Description": "\"Update README to include information about the Enable Toolhead Offsets toggle and Stealthburner defaults.\"",
+      "EndLine": "26",
+      "Instruction": "\"Update the Advanced Coordinate Mapping bullet to mention the global toggle and the stealthburner defaults.\"",
+      "ReplacementContent": "\"*   **Advanced Coordinate Mapping:** Accurately model offset ADXL sensors, non-centered nozzle placements, and toolhead Center of Mass using full Cartesian coordinates (including negative offsets). The default offset values loaded into the simulator repre\n<truncated 717 bytes>",
+      "StartLine": "24",
+      "TargetContent": "\"*   **Advanced Coordinate Mapping:** Accurately model offset ADXL sensors, non-centered nozzle placements, and toolhead Center of Mass using full Cartesian coordinates (including negative offsets). Compare the difference between the ADXL's predicted graph\n<truncated 411 bytes>",
+      "TargetFile": "\"c:/Users/Beetroot/.gemini/antigravity/scratch/shaper-sim/README.md\""
+    }
+  },
+  {
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": "false",
+      "Description": "\"Update PHYSICS_REFERENCE to clarify negative coordinate handling and specific COM offsets.\"",
+      "EndLine": "145",
+      "Instruction": "\"Clarify negative coordinate handling, lever-arm distances, and the definition of 'c' (COM offset) in the Toolhead Center-of-Mass Twist section.\"",
+      "ReplacementContent": "\"### 7.1 Toolhead Center-of-Mass Twist (X / Y / Z)\\nA non-centered toolhead COM creates a torque under acceleration, which becomes a secondary resonance via mount compliance. Three independent peaks are generated, one per axis. Full Cartesian coordinates (\n<truncated 1261 bytes>",
+      "StartLine": "136",
+      "TargetContent": "\"### 7.1 Toolhead Center-of-Mass Twist (X / Y / Z)\\nA non-centered toolhead COM creates a torque under acceleration, which becomes a secondary resonance via mount compliance. Three independent peaks are generated, one per axis:\\n\\n| Axis | Frequency Multip\n<truncated 1000 bytes>",
+      "TargetFile": "\"c:/Users/Beetroot/.gemini/antigravity/scratch/shaper-sim/PHYSICS_REFERENCE.md\""
+    }
+  }
+]

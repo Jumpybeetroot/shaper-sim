@@ -1,0 +1,1 @@
+const fs = require("fs"); eval(fs.readFileSync("shaper_logic.js", "utf8")); console.log("EI 100Hz:", find_shaper_max_accel(get_ei_shaper(100, 0.1), 5.0)); console.log("MZV 100Hz:", find_shaper_max_accel(get_mzv_shaper(100, 0.1), 5.0));
