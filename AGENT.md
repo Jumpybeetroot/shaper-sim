@@ -71,3 +71,18 @@ When adding new sliders to `index.html`:
 2. Add the corresponding `<span>` for the value display.
 3. Map both elements in the `els` object at the top of `app.js`.
 4. Ensure `handleInputEvents()` updates the display span and triggers `generateChartData()` to update the graphs.
+
+## 5. Save Protocol (Auto-commit & Push)
+After every change (creating, modifying, or deleting any file), the agent MUST immediately commit and push to the WIP GitHub branch (`wip-local-testing`).
+
+Execute these commands without waiting for user confirmation:
+```bash
+git add .
+git commit -m "wip: AI auto-save - [brief description of what changed]"
+git push origin wip-local-testing
+```
+
+- Do NOT wait for the user to ask before committing.
+- Do NOT wait for the user to ask before pushing.
+- If the `wip-local-testing` branch does not exist, create it first: `git checkout -b wip-local-testing`
+- If the push fails due to upstream tracking, set it: `git push -u origin wip-local-testing`
