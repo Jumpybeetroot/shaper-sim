@@ -972,119 +972,73 @@ window.addEventListener('load', () => {
             els.normalizeHeights.addEventListener('change', requestChartData);
         }
 
-        // --- Profiles ---
+        // --- Profiles (localStorage) ---
         const STORAGE_KEY = 'shaper_sim_profiles';
         
-        function loadProfiles() {
-            const profiles = { ...PRINTER_PROFILES };
-            const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-            for (let id in saved) {
-                profiles[id] = saved[id];
-            }
-            
+        function loadSavedProfilesList() {
+            const profiles = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+            // Clear all except the first default option
             while (els.profileSelect.options.length > 1) {
                 els.profileSelect.remove(1);
             }
-            
-            const sortedIds = Object.keys(profiles).sort((a, b) => {
-                const aPre = PRINTER_PROFILES[a] ? 0 : 1;
-                const bPre = PRINTER_PROFILES[b] ? 0 : 1;
-                if (aPre !== bPre) return aPre - bPre;
-                return (profiles[a].name || a).localeCompare(profiles[b].name || b);
-            });
-
-            sortedIds.forEach(id => {
+            for (let name in profiles) {
                 const opt = document.createElement('option');
-                opt.value = id;
-                opt.textContent = profiles[id].name || id;
-                if (!PRINTER_PROFILES[id]) opt.textContent += " (Custom)";
+                opt.value = name;
+                opt.textContent = name;
                 els.profileSelect.appendChild(opt);
-            });
-            
-            return profiles;
+            }
         }
         
-        let allProfiles = loadProfiles();
-
         els.btnSaveProfile.addEventListener('click', () => {
             const name = els.profileName.value.trim();
             if (!name) return alert('Please enter a profile name');
             
-            const id = 'custom_' + name.toLowerCase().replace(/[^a-z0-9]/g, '_');
-            const currentVals = {
-                name: name,
-                values: {}
-            };
-            
+            const currentVals = {};
             inputs.forEach(inp => {
-                if (inp && inp.id) {
-                    currentVals.values[inp.id] = inp.value;
+                if (inp) {
+                    currentVals[inp.id] = inp.value;
                 }
             });
             
-            let customProfiles = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-            customProfiles[id] = currentVals;
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(customProfiles));
+            let profiles = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+            profiles[name] = currentVals;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
             
-            allProfiles = loadProfiles();
-            els.profileSelect.value = id;
+            loadSavedProfilesList();
+            els.profileSelect.value = name;
             els.profileName.value = '';
         });
         
         els.profileSelect.addEventListener('change', () => {
-            const id = els.profileSelect.value;
-            if (!id) return;
+            const name = els.profileSelect.value;
+            if (!name) return;
             
-            const profile = allProfiles[id];
+            const profiles = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+            const profile = profiles[name];
             if (profile) {
-                if (profile.values) {
-                    for (let inputId in profile.values) {
-                        const inp = document.getElementById(inputId);
-                        if (inp) inp.value = profile.values[inputId];
+                inputs.forEach(inp => {
+                    if (inp && profile[inp.id] !== undefined) {
+                        inp.value = profile[inp.id];
                     }
-                } else if (PRINTER_PROFILES[id]) {
-                    const p = PRINTER_PROFILES[id];
-                    if (p.toolhead_weight) els.mass.value = p.toolhead_weight;
-                    if (p.y_gantry_weight) els.yMass.value = p.y_gantry_weight;
-                    if (p.belt_length) els.beltLength.value = p.belt_length;
-                    if (p.belt_type) els.beltType.value = p.belt_type;
-                    if (p.frame_stiffness) els.frameStiffness.value = p.frame_stiffness;
-                    if (p.motor_torque) {
-                        els.motorTorque.value = p.motor_torque;
-                        els.motorPreset.value = 'custom';
-                    }
-                    if (p.motor_inertia) {
-                        els.motorInertia.value = p.motor_inertia;
-                        els.motorPreset.value = 'custom';
-                    }
-                } else {
-                    inputs.forEach(inp => {
-                        if (inp && profile[inp.id] !== undefined) {
-                            inp.value = profile[inp.id];
-                        }
-                    });
-                }
-                handleInputEvents();
+                });
+                handleInputEvents(); // This forces updatePredictions and text displays
             }
         });
         
         els.btnDeleteProfile.addEventListener('click', () => {
-            const id = els.profileSelect.value;
-            if (!id) return;
+            const name = els.profileSelect.value;
+            if (!name) return;
             
-            if (PRINTER_PROFILES[id]) {
-                return alert("Cannot delete pre-built profiles");
-            }
+            let profiles = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+            delete profiles[name];
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
             
-            if (!confirm(`Delete profile "${allProfiles[id].name || id}"?`)) return;
-
-            let customProfiles = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-            delete customProfiles[id];
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(customProfiles));
-            
-            allProfiles = loadProfiles();
+            loadSavedProfilesList();
             els.profileSelect.value = '';
         });
+
+        // Initialize list
+        loadSavedProfilesList();
     } catch (e) {
         console.error("Initialization error:", e);
         document.body.innerHTML += `<div style="position:fixed; top:0; left:0; right:0; background:red; color:white; padding:20px; z-index:9999;">Initialization Error: ${e.message}<br><pre>${e.stack}</pre></div>`;
