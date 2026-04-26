@@ -342,12 +342,8 @@ function initChart() {
                 if (isStepMode) return; // Don't draw frequency markers on time chart
                 
                 const drawLine = (val, color, text) => {
-                    const maxX = parseFloat(els.scaleX.value) || 100;
-                    if (val < 1 || val > maxX) return;
-                    
-                    // Since it's a category scale starting at 1Hz, calculate fractional position
-                    const fraction = (val - 1) / (maxX - 1);
-                    const xPos = xAxis.left + fraction * (xAxis.right - xAxis.left);
+                    const xPos = xAxis.getPixelForValue(val);
+                    if (xPos < xAxis.left || xPos > xAxis.right) return;
                     
                     ctx.save();
                     ctx.beginPath();
@@ -866,39 +862,41 @@ function generateChartData() {
         if (importedRealData) {
             const axis = viewAxis === 'x' ? 'psd_x' : 'psd_y';
             let realPsd = [...importedRealData[axis]];
+            let realFreq = [...importedRealData.freq];
             
+            // Combine and sort by frequency to prevent "scribble" lines
+            let combined = realFreq.map((f, i) => ({ x: f, y: realPsd[i] }));
+            combined.sort((a, b) => a.x - b.x);
+
             if (els.normalizeHeights && els.normalizeHeights.checked) {
-                // Scale factor = max(simulated) / max(csv)
                 let maxSim = 0;
                 for (let i = 0; i < psd.length; i++) if (psd[i] > maxSim) maxSim = psd[i];
                 
                 let maxReal = 0;
-                for (let i = 0; i < realPsd.length; i++) if (realPsd[i] > maxReal) maxReal = realPsd[i];
+                for (let i = 0; i < combined.length; i++) if (combined[i].y > maxReal) maxReal = combined[i].y;
                 
                 if (maxReal > 0) {
                     const factor = maxSim / maxReal;
-                    realPsd = realPsd.map(v => v * factor);
+                    combined = combined.map(p => ({ x: p.x, y: p.y * factor }));
                 }
             }
 
             datasets.push({
                 label: `Real ADXL Data (${viewAxis.toUpperCase()})`,
-                data: importedRealData.freq.map((f, i) => ({x: f, y: realPsd[i]})),
-                borderColor: '#ffff00', // Bright yellow for contrast
-                borderWidth: 2,
+                data: combined,
+                borderColor: '#ffff00', 
+                borderWidth: 1.5,
                 fill: false,
                 pointRadius: 0,
                 pointHoverRadius: 4,
-                tension: 0.4
+                tension: 0 // No Bezier for noisy real data
             });
         }
 
-        chartInstance.data.labels = mathFreqs;
+        chartInstance.data.labels = []; // Clear labels for linear scale
         chartInstance.data.datasets = datasets;
         chartInstance.options.scales.x.max = parseFloat(els.scaleX.value);
-
-        // Revert to default scale type (category when labels are present)
-        chartInstance.options.scales.x.type = 'category';
+        chartInstance.options.scales.x.type = 'linear';
 
         // Reset tick limits
         if (chartInstance.options.scales.x.ticks) {
