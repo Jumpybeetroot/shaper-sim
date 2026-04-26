@@ -26,24 +26,7 @@ This document outlines the concise, step-by-step execution plan along with the e
 3.  **[x] Application Logic:** (Reverted)
 4.  **[x] Custom Saves:** (Reverted)
 
-## 3. Kinematic-Specific Coupling & Cross-Gantry
-
-### Step-by-Step Implementation:
-1.  **UI Additions:** 
-    *   "Kinematics Type": Cartesian | CoreXY (Cartesian disables the Move Direction slider).
-    *   Expand "Drive Config": 2WD | AWD-parallel | AWD-cross-gantry.
-    *   Add 2D bed canvas to click and set carriage position.
-    *   "Move Direction" slider (0°-45°) - active only for CoreXY.
-2.  **Position-dependent Belt Length (`shaper_logic.js`):**
-    *   Use $L_{active}$ computed from carriage position to motor-pulley anchor: $L_{active} = \max(L_{active\_A}, L_{active\_B})$.
-    *   Scale nominal stiffness: $K_{belt}(x,y) = K_{belt,nominal} \cdot \frac{L_{nominal}}{L_{active}(x,y)}$ (applied before AWD doubling).
-3.  **CoreXY Directional Excitation:**
-    *   Inject extra power for diagonal moves: $\text{amp}_{primary}^{diag} = \text{amp}_{primary} \cdot (1 + 0.25 \cdot |\sin(2\theta)|)$.
-4.  **Cross-Gantry AWD Racking Resistance:**
-    *   Model as a reduction to the existing racking peak: $\text{racking\_amp}_{AWD} = \text{racking\_amp}_{2WD} \cdot \frac{1}{1 + \beta}$.
-    *   $\beta = 0$ (Standard CoreXY), $\beta = 1.0$ (AWD parallel), $\beta = 2.0$ (Cross-gantry AWD).
-
-## 4. Motor Torque & Back-EMF Curves
+## 3. Motor Torque & Back-EMF Curves
 
 ### Step-by-Step Implementation:
 1.  **UI Updates:** Add sliders for `Supply Voltage (V)` (12-60), `Motor Inductance (mH)` (1-10), `Rated Current (A)` (0.5-3.0), and `Print Speed (mm/s)` (0-800).
@@ -60,7 +43,7 @@ This document outlines the concise, step-by-step execution plan along with the e
     *   Enforce a detent floor so stiffness doesn't collapse to zero: $K_{motor}^{dyn}(\omega) = K_{motor}^{static} \cdot \left(\gamma + (1-\gamma) \cdot \frac{T_{actual}}{T_{holding}}\right)$, where $\gamma = 0.5$.
     *   Update `predict_resonance()` to accept the new parameters and apply this factor to `Kmotor_single`.
 
-## 5. Interactive 3D Printer Visualizer
+## 4. Interactive 3D Printer Visualizer
 
 ### Step-by-Step Implementation:
 1.  **Setup:** Add the `Three.js` CDN script and a `<div id="visualizer-container">`.

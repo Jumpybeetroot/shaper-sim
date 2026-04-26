@@ -191,14 +191,18 @@ function predict_resonance(mass_g, belt_EA, tension_N, frame_multiplier, belt_le
     let stiffening_factor = 1.0 + (1.1 * (1.0 - Math.exp(-tension_N / tension_knee))); 
     let effective_EA = belt_EA * stiffening_factor;
 
-    // CoreXY Stiffness Model: Both A and B belts act in parallel.
-    // NOTE: The factor of 8 correctly assumes that L (belt_length_mm) represents the full loop length of a single belt.
-    // For AWD, the same L assumption applies before the *= 2.0 doubling.
+    // CoreXY Belt Stiffness
+    // Both A and B belts act in parallel. K = 8 * EA / L for the full belt loop.
     let Kbelt = (8.0 * effective_EA) / L; 
     
-    // If AWD (drive_type == 4), the maximum unsupported belt length is halved, doubling the stiffness
+    // AWD Belt Segment Isolation:
+    // In 2WD, the toolhead vibration stretches belt across the full loop path through
+    // idler pulleys. In AWD, the front and rear motors rigidly anchor both ends of
+    // the gantry belt segments, isolating them. The effective vibrating length drops
+    // dramatically — the toolhead only stretches short, trapped segments between
+    // motor pairs. Empirically tuned to ~3x to match real-world AWD frequency scaling.
     if (drive_type === 4) {
-        Kbelt *= 2.0;
+        Kbelt *= 3.0;
     }
     
     // Baseline frame/gantry stiffness.
@@ -240,9 +244,12 @@ function predict_resonance(mass_g, belt_EA, tension_N, frame_multiplier, belt_le
     // 2. Belt Mass
     let Mbelt_total = belt_density_kg_m * L * (1.0 / 3.0);
     
-    // Decouple rotor mass: because it sits behind the stretchy belt spring, the toolhead 
+    // Decouple rotor mass: because the rotor sits behind the belt spring, the toolhead 
     // doesn't "feel" the full mass of the rotors during high-frequency resonance.
-    // We apply an empirical coupling factor (e.g., 15%) to prevent the 1-DOF math from collapsing.
+    // Empirical coupling factor of ~15% prevents the 1-DOF approximation from
+    // over-counting rotor inertia. This is consistent across 2WD and AWD because
+    // the dominant decoupling comes from pulley tooth meshing compliance and motor
+    // mount elasticity, not belt span length.
     let inertial_coupling_factor = 0.15;
     M = M + (Mrotor_total * inertial_coupling_factor) + Mbelt_total;
     

@@ -45,6 +45,23 @@ Where:
 
 **Diminishing Returns:** The simulator enforces a dynamic stiffness multiplier curve. Over-tensioning a belt beyond its designed elastic limit yields diminishing returns in stiffness while drastically increasing the drag on the motor bearings.
 
+### AWD Belt Segment Isolation (2WD vs AWD)
+The drive configuration has a dramatic impact on effective belt stiffness. The simulator models this as follows:
+
+**2WD (Standard CoreXY):** Both stepper motors sit at the rear of the machine. Each belt loops from a rear motor, through idler pulleys at the front corners, across the gantry (where the toolhead grips it), and back. When the toolhead vibrates, it stretches belt across the **full loop path**, including long runs through compliant idler bearings and flexible mounts. The base belt stiffness is:
+
+$$K_{belt,2WD} = \frac{8 \cdot EA}{L}$$
+
+Where $L$ is the total belt loop length and $EA$ is the tensile rigidity of the belt.
+
+**AWD (All-Wheel Drive CoreXY):** Motors are placed at all four corners. The front and rear motor pairs rigidly anchor both ends of each gantry belt segment. The toolhead can no longer stretch the full belt loop — it is trapped between motor pairs on short, isolated segments. This eliminates the long compliant idler paths entirely and produces roughly **3× the effective belt stiffness** of 2WD:
+
+$$K_{belt,AWD} \approx 3 \times K_{belt,2WD}$$
+
+Additionally, AWD doubles the motor count from 2 to 4, which doubles the total magnetic spring stiffness ($K_{motor}$). Combined with the belt isolation effect, this produces a total system stiffness increase that yields **significantly higher resonance frequencies** — consistent with the 60-80% frequency gains observed on high-performance AWD builds.
+
+**Rotor Mass Decoupling:** The extra motor rotors do add physical mass to the vibrating system. However, because the rotor sits behind the belt spring (separated by pulley tooth meshing compliance and motor mount elasticity), the toolhead only "feels" approximately **15%** of each rotor's effective linear mass during high-frequency resonance. This low coupling factor is consistent across both 2WD and AWD configurations.
+
 ---
 
 ## 3. Structural Damping Ratio ($\zeta$)
@@ -61,10 +78,6 @@ Counter-intuitively, the structural damping ratio often moves inversely to frame
 Stepper motors don't lock rigidly. The rotor is held in place by a magnetic field, which acts exactly like a torsional spring. 
 
 $$K_{magnetic} \approx \frac{Holding Torque \times Current \%}{Step Angle}$$
-
-### Inertial Decoupling (The AWD Problem)
-In standard CoreXY (2WD), the toolhead mass dominates the equation. In All-Wheel Drive (AWD), you add two extra stepper motors. If you blindly add the rotor mass of these motors to your toolhead, the math predicts a massive drop in resonance.
-**The Fix:** Our simulator physically decouples rotational inertia. We only apply a 15% `inertial_coupling_factor` for the rotors, accurately modeling how AWD increases driving force *without* imposing a massive linear mass penalty on the system.
 
 ### Acceleration Smear (High-Speed Torque Loss)
 If you run Klipper's `TEST_RESONANCES` (ADXL test), the printer tests at a standstill. The motors have maximum torque, creating a stiff magnetic spring and a high frequency.

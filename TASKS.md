@@ -10,17 +10,12 @@
   - [ ] Add profile `<select>` dropdown to the sidebar UI.
   - [ ] Implement profile selection logic (overwriting existing slider DOM values).
   - [ ] Implement "Save Custom Profile" saving/loading to `localStorage`.
-- [ ] Feature 3: Kinematic-Specific Coupling & Cross-Gantry (AWD)
-  - [ ] Add Kinematics and AWD dropdown selectors in UI.
-  - [ ] Update `shaper_logic.js` for CoreXY diagonal effective stiffness.
-  - [ ] Update `shaper_logic.js` to handle AWD holding torque multipliers and racking resistance.
-  - [ ] Add 2D bed grid picker for calculating dynamic belt lengths based on XY position.
-- [ ] Feature 4: Motor Torque & Back-EMF Curves
+- [ ] Feature 3: Motor Torque & Back-EMF Curves
   - [ ] Add new inputs: Supply Voltage, Motor Inductance, Target Print Speed.
   - [ ] Implement Back-EMF and Torque degradation formulas based on speed.
   - [ ] Add a secondary torque vs. speed chart to visualize the torque corner.
   - [ ] Link target speed to dynamic resonance dropping in `shaper_logic.js`.
-- [ ] Feature 5: Interactive 3D Printer Visualizer
+- [ ] Feature 4: Interactive 3D Printer Visualizer
   - [ ] Import `Three.js` dependency.
   - [ ] Create 3D canvas and procedural generic printer wireframe meshes.
   - [ ] Implement `requestAnimationFrame` loop mapping simulation frequencies to sinusoidal displacement.
