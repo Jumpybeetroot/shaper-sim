@@ -1,5 +1,30 @@
 # AI Agent Instructions (shaper-sim)
 
+## Journal
+
+At the start of a session, create a new journal file at the root of
+the working directory: `journal-N.md`, where N is one higher than
+the highest existing `journal-*.md` (start at 1 if none exist).
+
+Append an entry for every non-trivial action you take. Write it as
+you do the work, not as a summary at the end.
+
+Each entry should include:
+- ISO timestamp (`YYYY-MM-DD HH:MM`)
+- One-line summary
+- The exact command, if one was run, and the actual result or
+  output (not a paraphrase)
+- Files edited and why
+- Hypotheses and whether they held up
+- Dead-ends, with a note on why the thing didn't work
+- Links read during research
+- Decisions made and the reasoning behind them
+
+Before starting new work, or after a context compaction, read the
+current journal to orient yourself. If this is a fresh attempt at a
+task you've tried before, skim the previous `journal-*.md` files
+too.
+
 Hello, fellow AI coding assistant! If you are reading this, you are working on the **Kalico Input Shaper Simulator**. This file contains critical architectural rules and context to prevent regressions in this codebase. Read this carefully before modifying any code.
 
 ## 1. Tech Stack & Philosophy
@@ -33,6 +58,12 @@ The primary resonance in `generate_psd_curve()` is a Lorentzian with two hardcod
 
 ### D. Snapshot State Shape
 `snapshotX` / `snapshotY` in `app.js` store the full capture context: `{ psd, shapedPsd, mathFreqs, damping, targetFreq, shaperName }`. This is intentional — because peak PSD scales with $Q^2$, two bare PSD arrays captured at different damping ratios are not directly comparable. The legend label on snapshot datasets must show the captured parameters (`ζ=…, … Hz`) so A/B comparison is unambiguous. Don't reduce the snapshot back to a loose array.
+
+### E. Float Array Indexing in Loops
+When populating sized arrays (like `Float64Array`) in physics loops, never use floating-point accumulation for loop bounds (e.g., `for(let t = 0; t <= duration; t += dt)`). Floating-point inaccuracies will cause off-by-one errors and spurious artifacts (like lines returning to the origin). Always use integer-based index iteration (e.g., `for(let i = 0; i < N; i++) { let t = i * dt; }`).
+
+### F. Chart.js Scale Management
+When switching between linear scales (e.g., Step Response) and category scales (e.g., PSD) in Chart.js, do not use `delete chartInstance.options.scales.x.type` as the library might incorrectly persist the linear scale settings. Explicitly set the scale type instead (e.g., `chartInstance.options.scales.x.type = 'category'`).
 
 ## 4. Modifying the UI
 When adding new sliders to `index.html`:

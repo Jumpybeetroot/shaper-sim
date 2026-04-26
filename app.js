@@ -6,6 +6,151 @@ let chartInstance = null;
 let snapshotX = null;
 let snapshotY = null;
 
+let renderRafId = null;
+
+// Persistent State & Cache
+const SimulationState = {
+    cachedMaxHz: -1,
+    cachedDamping: -1,
+    cachedMathFreqs: [],
+    cachedMathMemo: null,
+    sharedStepPsd: new Float64Array(2000)
+};
+
+function getMathCache(max_hz, damping) {
+    if (SimulationState.cachedMaxHz === max_hz && SimulationState.cachedDamping === damping && SimulationState.cachedMathMemo) {
+        return { mathFreqs: SimulationState.cachedMathFreqs, mathMemo: SimulationState.cachedMathMemo };
+    }
+    const mathFreqs = [];
+    for (let f = 1; f <= max_hz; f += 0.5) { mathFreqs.push(f); }
+    
+    const mathMemo = {
+        omega: new Float64Array(mathFreqs.length),
+        damping: new Float64Array(mathFreqs.length),
+        omega_d: new Float64Array(mathFreqs.length),
+        length: mathFreqs.length
+    };
+    const dfMemo = Math.sqrt(1.0 - damping * damping);
+    for (let k = 0; k < mathFreqs.length; k++) {
+        const omega = 2.0 * Math.PI * mathFreqs[k];
+        mathMemo.omega[k] = omega;
+        mathMemo.damping[k] = damping * omega;
+        mathMemo.omega_d[k] = omega * dfMemo;
+    }
+    
+    SimulationState.cachedMaxHz = max_hz;
+    SimulationState.cachedDamping = damping;
+    SimulationState.cachedMathFreqs = mathFreqs;
+    SimulationState.cachedMathMemo = mathMemo;
+    
+    return { mathFreqs, mathMemo };
+}
+
+function calculate_dynamic_psd(mass, imp, mathFreqs, params) {
+    let nominalFreq = predict_resonance(mass, params.beltEA, params.tension, params.frame, params.beltLen, params.driveType, params.motorTorque, params.motorCurrent, 50, 20, params.motorInertia, params.beltDensity);
+    
+    let integratedPsd = new Float64Array(mathFreqs.length);
+
+    if (params.isDynamicSpeed) {
+        const steps = 15; // Integrate across 15 speed steps from SCV up to target speed
+        
+        for (let i = 0; i < steps; i++) {
+            const currentSpeed = params.scv + (params.targetSpeed - params.scv) * (i / (steps - 1));
+            const torqueMultiplier = Math.exp(-currentSpeed / 430.0);
+            const dynamicTorque = params.motorTorque * torqueMultiplier;
+            
+            const stepFreq = predict_resonance(mass, params.beltEA, params.tension, params.frame, params.beltLen, params.driveType, dynamicTorque, params.motorCurrent, 50, 20, params.motorInertia, params.beltDensity);
+            
+            generate_psd_curve(stepFreq, mathFreqs, imp, SimulationState.sharedStepPsd);
+            
+            for (let j = 0; j < mathFreqs.length; j++) {
+                integratedPsd[j] += SimulationState.sharedStepPsd[j] / steps;
+            }
+        }
+        return { freq: nominalFreq, psd: integratedPsd };
+    } else {
+        generate_psd_curve(nominalFreq, mathFreqs, imp, integratedPsd);
+        return { freq: nominalFreq, psd: integratedPsd };
+    }
+}
+
+function scoreShapers(axisFreq, rawPsd, memo, mathFreqs, max_hz, scv, damping) {
+    let best_shaper = null;
+    let best_score = -1;
+    let results = {};
+
+    for (const s of Object.keys(shaperNames)) {
+        let best_f = axisFreq;
+        let best_shaper_score = -1;
+        let min_shaper_vib_pct = 1000;
+        let best_shaper_accel = 0;
+
+        const testFreq = (f_test) => {
+            const shaper = SHAPERS[s](f_test, damping);
+            const { fraction } = estimate_remaining_vibrations(shaper, damping, mathFreqs, rawPsd, memo);
+            const vibrations_pct = fraction * 100.0;
+            const max_accel = find_shaper_max_accel(shaper, scv);
+
+            if (vibrations_pct <= 5.0) {
+                if (max_accel > best_shaper_score) {
+                    best_shaper_score = max_accel;
+                    best_f = f_test;
+                    min_shaper_vib_pct = vibrations_pct;
+                    best_shaper_accel = max_accel;
+                }
+            } else if (best_shaper_score === -1 && vibrations_pct < min_shaper_vib_pct) {
+                // Fallback track lowest vibrations if none pass
+                min_shaper_vib_pct = vibrations_pct;
+                best_f = f_test;
+                best_shaper_accel = max_accel;
+            }
+        };
+
+        // Pass 1: Coarse sweep (3.0 Hz steps)
+        for (let f_test = 10; f_test <= max_hz; f_test += 3.0) {
+            testFreq(f_test);
+        }
+        
+        // Pass 2: Fine sweep (+/- 3.0 Hz around coarse best, 0.5 Hz steps)
+        const coarse_best = best_f;
+        const fine_min = Math.max(10.0, coarse_best - 3.0);
+        const fine_max = Math.min(max_hz, coarse_best + 3.0);
+        for (let f_test = fine_min; f_test <= fine_max; f_test += 0.5) {
+            testFreq(f_test);
+        }
+
+        // Calculate final smoothing for the best chosen frequency
+        const final_shaper = SHAPERS[s](best_f, damping);
+        const smoothing = get_shaper_smoothing(final_shaper, 5000, scv);
+
+        results[s] = {
+            max_accel: best_shaper_accel,
+            vibrations: min_shaper_vib_pct,
+            smoothing: smoothing,
+            freq: best_f
+        };
+
+        if (min_shaper_vib_pct <= 5.0) { // Klipper rejects shapers that leave >5% vibrations
+            if (best_shaper_accel > best_score) {
+                best_score = best_shaper_accel;
+                best_shaper = s;
+            }
+        }
+    }
+
+    // Fallback: if all fail 5% threshold, pick the one with lowest vibrations
+    if (!best_shaper) {
+        let min_vib = 1000;
+        for (const s of Object.keys(results)) {
+            if (results[s].vibrations < min_vib) {
+                min_vib = results[s].vibrations;
+                best_shaper = s;
+            }
+        }
+    }
+    return { results, best_shaper };
+}
+
 // UI Elements
 const els = {
     // Simulation settings
@@ -65,6 +210,8 @@ const els = {
     scaleX: document.getElementById('scale-x'),
     axisToggle: document.getElementById('axis-toggle'),
     graphMode: document.getElementById('graph-mode'),
+    shaperSelect: document.getElementById('shaper-select'),
+    shaperContainer: document.getElementById('shaper-selector-container'),
     
     predX: document.getElementById('pred-x'),
     predY: document.getElementById('pred-y'),
@@ -133,7 +280,12 @@ function initChart() {
                     borderWidth: 1,
                     callbacks: {
                         label: function(context) {
-                            return `${context.dataset.label}: ${context.raw.toExponential(2)}`;
+                            const isStepMode = els.graphMode && els.graphMode.value === 'step';
+                            const yVal = context.parsed.y;
+                            if (isStepMode) {
+                                return `${context.dataset.label}: ${yVal.toFixed(3)}`;
+                            }
+                            return `${context.dataset.label}: ${yVal.toExponential(2)}`;
                         }
                     }
                 }
@@ -266,16 +418,14 @@ function updatePredictions() {
     const rho = beltDensity;
     const tension = 4 * rho * Math.pow(span_m, 2) * Math.pow(hz, 2);
     
-    els.tensionVal.textContent = `${hz} Hz (~${tension.toFixed(1)} N)`;
-    
     const motorTorque = parseFloat(els.motorTorque.value);
     const motorCurrent = parseFloat(els.motorCurrent.value);
     const motorInertia = parseFloat(els.motorInertia.value);
     
     // Simulate Klipper's ADXL Post-Processing
     const max_hz = parseFloat(els.scaleX.value);
-    const mathFreqs = [];
-    for (let f = 1; f <= max_hz; f += 0.5) { mathFreqs.push(f); }
+    
+    const { mathFreqs, mathMemo } = getMathCache(max_hz, damping);
     
     const impX = { 
         axis: 'x',
@@ -312,38 +462,15 @@ function updatePredictions() {
         damping_ratio: damping 
     };
     
-    // Helper to calculate PSD with optional acceleration smearing
-    const calculate_dynamic_psd = (mass, imp) => {
-        let nominalFreq = predict_resonance(mass, beltEA, tension, frame, beltLen, driveType, motorTorque, motorCurrent, 50, 20, motorInertia, beltDensity);
-        
-        if (els.enableDynamicSpeed && els.enableDynamicSpeed.checked) {
-            const targetSpeed = parseFloat(els.printSpeed.value);
-            const scv = parseFloat(els.scv.value);
-            
-            let integratedPsd = new Array(mathFreqs.length).fill(0);
-            const steps = 15; // Integrate across 15 speed steps from SCV up to target speed
-            
-            for (let i = 0; i < steps; i++) {
-                const currentSpeed = scv + (targetSpeed - scv) * (i / (steps - 1));
-                const torqueMultiplier = Math.exp(-currentSpeed / 430.0);
-                const dynamicTorque = motorTorque * torqueMultiplier;
-                
-                const stepFreq = predict_resonance(mass, beltEA, tension, frame, beltLen, driveType, dynamicTorque, motorCurrent, 50, 20, motorInertia, beltDensity);
-                const stepPsd = generate_psd_curve(stepFreq, mathFreqs, imp);
-                
-                for (let j = 0; j < mathFreqs.length; j++) {
-                    integratedPsd[j] += stepPsd[j] / steps;
-                }
-            }
-            return { freq: nominalFreq, psd: integratedPsd };
-        } else {
-            const psd = generate_psd_curve(nominalFreq, mathFreqs, imp);
-            return { freq: nominalFreq, psd: psd };
-        }
+    const dynParams = {
+        beltEA, tension, frame, beltLen, driveType, motorTorque, motorCurrent, motorInertia, beltDensity,
+        isDynamicSpeed: els.enableDynamicSpeed && els.enableDynamicSpeed.checked,
+        targetSpeed: parseFloat(els.printSpeed.value),
+        scv
     };
     
-    const resX = calculate_dynamic_psd(mX, impX);
-    const resY = calculate_dynamic_psd(mY, impY);
+    const resX = calculate_dynamic_psd(mX, impX, mathFreqs, dynParams);
+    const resY = calculate_dynamic_psd(mY, impY, mathFreqs, dynParams);
     
     const freqX = resX.freq;
     const freqY = resY.freq;
@@ -353,77 +480,12 @@ function updatePredictions() {
     // Store globally so the chart renderer doesn't have to recalculate
     window.currentPsdX = psdX;
     window.currentPsdY = psdY;
+
+    // Update tension label
+    updateLabels(hz, tension, freqX, freqY, null, null, null, null);
     
-    const scoreShapers = (axisFreq, rawPsd) => {
-        let best_shaper = null;
-        let best_score = -1;
-        let results = {};
-
-        for (const s of Object.keys(shaperNames)) {
-            let best_f = axisFreq;
-            let best_shaper_score = -1;
-            let min_shaper_vib_pct = 1000;
-            let best_shaper_accel = 0;
-
-            // Sweep frequencies up to the chosen max_hz
-            for (let f_test = 10; f_test <= max_hz; f_test += 1.0) {
-                const shaper = SHAPERS[s](f_test, damping);
-                const { fraction } = estimate_remaining_vibrations(shaper, damping, mathFreqs, rawPsd);
-                const vibrations_pct = fraction * 100.0;
-                const max_accel = find_shaper_max_accel(shaper, scv);
-
-                if (vibrations_pct <= 5.0) {
-                    if (max_accel > best_shaper_score) {
-                        best_shaper_score = max_accel;
-                        best_f = f_test;
-                        min_shaper_vib_pct = vibrations_pct;
-                        best_shaper_accel = max_accel;
-                    }
-                } else if (best_shaper_score === -1 && vibrations_pct < min_shaper_vib_pct) {
-                    // Fallback track lowest vibrations if none pass
-                    min_shaper_vib_pct = vibrations_pct;
-                    best_f = f_test;
-                    best_shaper_accel = max_accel;
-                }
-            }
-
-            // Calculate final smoothing for the best chosen frequency
-            const final_shaper = SHAPERS[s](best_f, damping);
-            const smoothing = get_shaper_smoothing(final_shaper, 5000, scv);
-
-            results[s] = {
-                max_accel: best_shaper_accel,
-                vibrations: min_shaper_vib_pct,
-                smoothing: smoothing,
-                freq: best_f
-            };
-
-            if (min_shaper_vib_pct <= 5.0) { // Klipper rejects shapers that leave >5% vibrations
-                if (best_shaper_accel > best_score) {
-                    best_score = best_shaper_accel;
-                    best_shaper = s;
-                }
-            }
-        }
-
-        // Fallback: if all fail 5% threshold, pick the one with lowest vibrations
-        if (!best_shaper) {
-            let min_vib = 1000;
-            for (const s of Object.keys(results)) {
-                if (results[s].vibrations < min_vib) {
-                    min_vib = results[s].vibrations;
-                    best_shaper = s;
-                }
-            }
-        }
-        return { results, best_shaper };
-    };
-
-    // Klipper rounds the reported max_accel to the nearest 100 at display time only.
-    const displayAccel = (a) => Math.round(a / 100.0) * 100.0;
-    
-    const scoreX = scoreShapers(freqX, psdX);
-    const scoreY = scoreShapers(freqY, psdY);
+    const scoreX = scoreShapers(freqX, psdX, mathMemo, mathFreqs, max_hz, scv, damping);
+    const scoreY = scoreShapers(freqY, psdY, mathMemo, mathFreqs, max_hz, scv, damping);
     
     const recX = scoreX.results[scoreX.best_shaper];
     const recY = scoreY.results[scoreY.best_shaper];
@@ -432,31 +494,43 @@ function updatePredictions() {
     window.bestShaperX = scoreX.best_shaper;
     window.bestShaperY = scoreY.best_shaper;
     
-    els.predX.textContent = `Predicted X: ${freqX.toFixed(1)} Hz (Max Accel: ${displayAccel(recX.max_accel)} mm/s² | Smoothing ~${recX.smoothing.toFixed(3)})`;
-    els.predY.textContent = `Predicted Y: ${freqY.toFixed(1)} Hz (Max Accel: ${displayAccel(recY.max_accel)} mm/s² | Smoothing ~${recY.smoothing.toFixed(3)})`;
-    
-    els.predX.dataset.val = freqX;
-    els.predY.dataset.val = freqY;
-    
-    // Generate Simulated Klipper Console Output
-    let out = `Calculating shaper recommendations based on predicted ADXL PSD physics...\n\n`;
-    out += `========== X AXIS (${freqX.toFixed(1)} Hz) ==========\n`;
-    for (const s of Object.keys(shaperNames)) {
-        const r = scoreX.results[s];
-        out += `Fitted shaper '${s}' frequency = ${r.freq.toFixed(1)} Hz (vibrations = ${r.vibrations.toFixed(1)}%, smoothing ~= ${r.smoothing.toFixed(3)})\n`;
-        out += `To avoid too much smoothing with '${s}', suggested max_accel <= ${displayAccel(r.max_accel)} mm/sec^2\n`;
-    }
-    out += `\nRecommended shaper is ${scoreX.best_shaper} @ ${recX.freq.toFixed(1)} Hz (Max Accel: ${displayAccel(recX.max_accel)} mm/s²)\n\n`;
+    updateLabels(hz, tension, freqX, freqY, recX, recY, scoreX, scoreY);
+}
 
-    out += `========== Y AXIS (${freqY.toFixed(1)} Hz) ==========\n`;
-    for (const s of Object.keys(shaperNames)) {
-        const r = scoreY.results[s];
-        out += `Fitted shaper '${s}' frequency = ${r.freq.toFixed(1)} Hz (vibrations = ${r.vibrations.toFixed(1)}%, smoothing ~= ${r.smoothing.toFixed(3)})\n`;
-        out += `To avoid too much smoothing with '${s}', suggested max_accel <= ${displayAccel(r.max_accel)} mm/sec^2\n`;
+function updateLabels(hz, tension, freqX, freqY, recX, recY, scoreX, scoreY) {
+    if (hz !== null && tension !== null) {
+        els.tensionVal.textContent = `${hz} Hz (~${tension.toFixed(1)} N)`;
     }
-    out += `\nRecommended shaper is ${scoreY.best_shaper} @ ${recY.freq.toFixed(1)} Hz (Max Accel: ${displayAccel(recY.max_accel)} mm/s²)\n`;
     
-    els.klipperConsole.textContent = out;
+    const displayAccel = (a) => Math.round(a / 100.0) * 100.0;
+    
+    if (recX && recY && scoreX && scoreY) {
+        els.predX.textContent = `Predicted X: ${freqX.toFixed(1)} Hz (Max Accel: ${displayAccel(recX.max_accel)} mm/s² | Smoothing ~${recX.smoothing.toFixed(3)})`;
+        els.predY.textContent = `Predicted Y: ${freqY.toFixed(1)} Hz (Max Accel: ${displayAccel(recY.max_accel)} mm/s² | Smoothing ~${recY.smoothing.toFixed(3)})`;
+        
+        els.predX.dataset.val = freqX;
+        els.predY.dataset.val = freqY;
+        
+        // Generate Simulated Klipper Console Output
+        let out = `Calculating shaper recommendations based on predicted ADXL PSD physics...\n\n`;
+        out += `========== X AXIS (${freqX.toFixed(1)} Hz) ==========\n`;
+        for (const s of Object.keys(shaperNames)) {
+            const r = scoreX.results[s];
+            out += `Fitted shaper '${s}' frequency = ${r.freq.toFixed(1)} Hz (vibrations = ${r.vibrations.toFixed(1)}%, smoothing ~= ${r.smoothing.toFixed(3)})\n`;
+            out += `To avoid too much smoothing with '${s}', suggested max_accel <= ${displayAccel(r.max_accel)} mm/sec^2\n`;
+        }
+        out += `\nRecommended shaper is ${scoreX.best_shaper} @ ${recX.freq.toFixed(1)} Hz (Max Accel: ${displayAccel(recX.max_accel)} mm/s²)\n\n`;
+
+        out += `========== Y AXIS (${freqY.toFixed(1)} Hz) ==========\n`;
+        for (const s of Object.keys(shaperNames)) {
+            const r = scoreY.results[s];
+            out += `Fitted shaper '${s}' frequency = ${r.freq.toFixed(1)} Hz (vibrations = ${r.vibrations.toFixed(1)}%, smoothing ~= ${r.smoothing.toFixed(3)})\n`;
+            out += `To avoid too much smoothing with '${s}', suggested max_accel <= ${displayAccel(r.max_accel)} mm/sec^2\n`;
+        }
+        out += `\nRecommended shaper is ${scoreY.best_shaper} @ ${recY.freq.toFixed(1)} Hz (Max Accel: ${displayAccel(recY.max_accel)} mm/s²)\n`;
+        
+        els.klipperConsole.textContent = out;
+    }
 }
 
 function handleInputEvents(e) {
@@ -465,6 +539,19 @@ function handleInputEvents(e) {
         els.beltLength.value = (pSize * 4) + 800;
     }
 
+    updateInputLabels();
+    
+    // 2. Debounce the heavy math
+    if (!renderRafId) {
+        renderRafId = requestAnimationFrame(() => {
+            updatePredictions();
+            generateChartData();
+            renderRafId = null;
+        });
+    }
+}
+
+function updateInputLabels() {
     // Update displays
     els.dampingVal.textContent = parseFloat(els.damping.value).toFixed(3);
     els.scvVal.textContent = parseFloat(els.scv.value).toFixed(1);
@@ -505,9 +592,15 @@ function handleInputEvents(e) {
         }
         els.printSpeedVal.textContent = `${els.printSpeed.value} mm/s`;
     }
-    
-    updatePredictions();
-    generateChartData();
+}
+
+function requestChartData() {
+    if (!renderRafId) {
+        renderRafId = requestAnimationFrame(() => {
+            generateChartData();
+            renderRafId = null;
+        });
+    }
 }
 
 // Attach event listeners to all inputs
@@ -525,8 +618,20 @@ inputs.forEach(input => {
     }
 });
 
-if (els.axisToggle) els.axisToggle.addEventListener('change', generateChartData);
-if (els.graphMode) els.graphMode.addEventListener('change', generateChartData);
+if (els.axisToggle) els.axisToggle.addEventListener('change', requestChartData);
+if (els.graphMode) {
+    els.graphMode.addEventListener('change', () => {
+        if (els.shaperContainer) {
+            if (els.graphMode.value === 'step') {
+                els.shaperContainer.classList.remove('hidden');
+            } else {
+                els.shaperContainer.classList.add('hidden');
+            }
+        }
+        requestChartData();
+    });
+}
+if (els.shaperSelect) els.shaperSelect.addEventListener('change', requestChartData);
 
 const motorPresets = {
     'ldo-48': { torque: 550, inertia: 84.5 },
@@ -569,18 +674,22 @@ function generateChartData() {
         
         // Let chart.js handle Y max dynamically based on overshoot
         delete chartInstance.options.scales.y.max;
+        if (chartInstance.options.scales.x) {
+            delete chartInstance.options.scales.x.max;
+        }
         
-        const activeShaperName = recommendedShaper; // Default to best, or could use a selected one
+        const manualShaper = els.shaperSelect ? els.shaperSelect.value : 'recommended';
+        const activeShaperName = manualShaper === 'recommended' ? recommendedShaper : manualShaper;
         const shaper_func = SHAPERS[activeShaperName];
         const shaper = shaper_func ? shaper_func(targetFreq, currentDamping) : null;
         
         const { times, unshaped, shaped } = generate_step_responses(targetFreq, currentDamping, shaper, 0.250, 0.0005);
         
-        const labels = times.map(t => (t * 1000).toFixed(1)); // ms
+        const timeMs = Array.from(times, t => t * 1000); // ms as numbers for linear scale
         
         datasets.push({
             label: 'Unshaped Step Response',
-            data: labels.map((l, i) => ({x: l, y: unshaped[i]})),
+            data: timeMs.map((t, i) => ({x: t, y: unshaped[i]})),
             borderColor: '#ffffff',
             borderWidth: 2,
             borderDash: [5, 5],
@@ -592,7 +701,7 @@ function generateChartData() {
         
         datasets.push({
             label: `Shaped (${shaperNames[activeShaperName] || activeShaperName})`,
-            data: labels.map((l, i) => ({x: l, y: shaped[i]})),
+            data: timeMs.map((t, i) => ({x: t, y: shaped[i]})),
             borderColor: colors[activeShaperName] || '#00ff66',
             borderWidth: 3,
             fill: false,
@@ -601,10 +710,13 @@ function generateChartData() {
             tension: 0.1
         });
         
-        chartInstance.data.labels = labels;
+        // Use numeric {x,y} data points only; clear old labels and force a
+        // linear scale so Chart.js interprets x as time in milliseconds.
+        chartInstance.data.labels = [];
+        chartInstance.options.scales.x.type = 'linear';
         chartInstance.data.datasets = datasets;
-        
-        // For categorical scale, limit number of ticks
+
+        // Limit number of x-axis ticks for the time-domain view
         chartInstance.options.scales.x.ticks = {
             maxTicksLimit: 20
         };
@@ -687,7 +799,10 @@ function generateChartData() {
         chartInstance.data.labels = mathFreqs;
         chartInstance.data.datasets = datasets;
         chartInstance.options.scales.x.max = parseFloat(els.scaleX.value);
-        
+
+        // Revert to default scale type (category when labels are present)
+        chartInstance.options.scales.x.type = 'category';
+
         // Reset tick limits
         if (chartInstance.options.scales.x.ticks) {
             delete chartInstance.options.scales.x.ticks.maxTicksLimit;
@@ -725,14 +840,14 @@ window.addEventListener('load', () => {
             if (viewAxis === 'x') snapshotX = snap;
             else snapshotY = snap;
 
-            els.btnClearSnapshot.style.display = 'flex';
+            els.btnClearSnapshot.classList.remove('hidden');
             updatePredictions();
         });
 
         els.btnClearSnapshot.addEventListener('click', () => {
             snapshotX = null;
             snapshotY = null;
-            els.btnClearSnapshot.style.display = 'none';
+            els.btnClearSnapshot.classList.add('hidden');
             updatePredictions();
         });
 

@@ -3,13 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Predict and simulate Klipper Input Shaper resonance frequencies for CoreXY 3D printers. Adjust mechanical parameters to see predicted Power Spectral Density before running an ADXL345 test.">
+    <meta property="og:title" content="Kalico Input Shaper Simulator">
+    <meta property="og:description" content="Simulate Klipper Input Shaper resonance and step response for CoreXY 3D printers.">
+    <meta property="og:type" content="website">
     <title>Kalico Input Shaper Simulator</title>
     
     <script>
     window.onerror = function(msg, url, line, col, error) {
-        document.addEventListener('DOMContentLoaded', function() {
-            document.body.innerHTML = '<div style="background:red; color:white; padding:20px; font-size:20px; z-index:9999; position:fixed; top:0; left:0; right:0;">GLOBAL ERROR: ' + msg + ' at line ' + line + '</div>' + document.body.innerHTML;
-        });
+        var banner = document.createElement('div');
+        banner.className = 'global-error';
+        banner.textContent = 'GLOBAL ERROR: ' + msg + ' at line ' + line;
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                document.body.insertBefore(banner, document.body.firstChild);
+            });
+        } else {
+            document.body.insertBefore(banner, document.body.firstChild);
+        }
         return false;
     };
     </script>
@@ -20,10 +31,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" crossorigin="anonymous"></script>
     
     <!-- Phosphor Icons -->
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web" crossorigin="anonymous"></script>
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css">
@@ -37,23 +48,25 @@
                 <h2>ShaperSim</h2>
             </div>
             
-            <details class="control-section" style="background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.2);" open>
-                <summary><h3 style="color: #00f0ff;"><i class="ph ph-floppy-disk"></i> Tuning Profiles<i class="ph ph-caret-down" style="margin-left: auto;"></i></h3></summary>
+            <details class="control-section highlighted-section" open>
+                <summary><h3 class="highlighted-title"><i class="ph ph-floppy-disk"></i> Tuning Profiles<i class="ph ph-caret-down ml-auto"></i></h3></summary>
                 
                 <div class="control-group">
-                    <select id="profile-select" style="width: 100%; margin-bottom: 8px;">
+                    <select id="profile-select" class="profile-select">
                         <option value="">-- Select Profile --</option>
                     </select>
-                    <div style="display: flex; gap: 8px;">
-                        <input type="text" id="profile-name" placeholder="Profile name..." style="flex: 1; padding: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; border-radius: 4px;">
-                        <button id="save-profile-btn" style="background: rgba(0, 240, 255, 0.2); color: #00f0ff; border: 1px solid rgba(0, 240, 255, 0.4); border-radius: 4px; padding: 0 10px; cursor: pointer;"><i class="ph ph-floppy-disk"></i></button>
-                        <button id="delete-profile-btn" style="background: rgba(255, 50, 50, 0.2); color: #ff3232; border: 1px solid rgba(255, 50, 50, 0.4); border-radius: 4px; padding: 0 10px; cursor: pointer;"><i class="ph ph-trash"></i></button>
+                    <div class="profile-actions">
+                        <input type="text" id="profile-name" placeholder="Profile name..." class="profile-input">
+                        <button id="save-profile-btn" class="btn-icon btn-save" aria-label="Save profile"><i class="ph ph-floppy-disk"></i></button>
+                        <button id="delete-profile-btn" class="btn-icon btn-delete" aria-label="Delete profile"><i class="ph ph-trash"></i></button>
                     </div>
                 </div>
             </details>
 
+
+
             <details class="control-section" open>
-                <summary><h3><i class="ph ph-sliders"></i> Simulation Settings<i class="ph ph-caret-down" style="margin-left: auto;"></i></h3></summary>
+                <summary><h3><i class="ph ph-sliders"></i> Simulation Settings<i class="ph ph-caret-down ml-auto"></i></h3></summary>
                 
                 <div class="control-group">
                     <label for="damping-ratio">
@@ -61,8 +74,8 @@
                         <span id="damping-val" class="value-display">0.100</span>
                     </label>
                     <input type="range" id="damping-ratio" min="0.010" max="0.200" step="0.005" value="0.100">
-                    <div class="tension-display" style="text-align: left; margin-top: 4px;">
-                        <span style="font-size: 11px; color: var(--text-secondary); line-height: 1.3;">
+                    <div class="help-text-block">
+                        <span class="help-text">
                             <b>Tip:</b> Rigid frames "ring" longer. Use lower Klipper damping ratios (0.04-0.07) for rigid billet frames, and higher (0.10-0.15) for flexible bare/VHB frames.
                         </span>
                     </div>
@@ -78,7 +91,7 @@
             </details>
 
             <details class="control-section" open>
-                <summary><h3>Graph Settings<i class="ph ph-caret-down" style="margin-left: auto;"></i></h3></summary>
+                <summary><h3>Graph Settings<i class="ph ph-caret-down ml-auto"></i></h3></summary>
                 <div class="control-group">
                     <label for="scale-x">Max Frequency (Hz)</label>
                     <input type="number" id="scale-x" value="250" step="10" min="50" max="400">
@@ -86,7 +99,7 @@
             </details>
 
             <details class="control-section" open>
-                <summary><h3><i class="ph ph-cube"></i> CoreXY Mechanicals<i class="ph ph-caret-down" style="margin-left: auto;"></i></h3></summary>
+                <summary><h3><i class="ph ph-cube"></i> CoreXY Mechanicals<i class="ph ph-caret-down ml-auto"></i></h3></summary>
                 
                 <div class="control-group">
                     <label for="drive-type">Drive Configuration</label>
@@ -102,7 +115,7 @@
                 </div>
 
                 <div class="control-group">
-                    <label for="y-gantry-weight">Y Gantry Weight (g) <span style="font-size: 11px; color: var(--text-secondary); font-weight: normal;">(Excluding Toolhead)</span></label>
+                    <label for="y-gantry-weight">Y Gantry Weight (g) <span class="label-desc">(Excluding Toolhead)</span></label>
                     <input type="number" id="y-gantry-weight" value="650" step="10">
                 </div>
 
@@ -137,8 +150,8 @@
                 <div class="control-group">
                     <label for="frame-stiffness">Frame Stiffness</label>
                     <input type="range" id="frame-stiffness" min="0.5" max="10.0" step="0.1" value="1.0">
-                    <div class="tension-display" style="display: flex; justify-content: space-between; align-items: flex-start; margin-top: 4px;">
-                        <span style="font-size: 11px; color: var(--text-secondary); text-align: left; line-height: 1.3;">
+                    <div class="tension-display flex-between">
+                        <span class="help-text">
                             0.5 = Acrylic/Poor<br>
                             1.0 = Bare 2020<br>
                             4.0 = Bare 4040<br>
@@ -148,11 +161,11 @@
                             9.0 = 4040 + 5mm Alu<br>
                             10.0 = CNC Billet/Cast Iron
                         </span>
-                        <span id="stiffness-val" style="margin-top: 4px;">1.0</span>
+                        <span id="stiffness-val" class="mt-4">1.0</span>
                     </div>
-                    <div style="margin-top: 6px; font-size: 10px; color: var(--text-secondary); line-height: 1.2;">
+                    <div class="help-text small">
                         <em>* Structural panels must be continuously bolted/bonded to extrusions to prevent bowing; flimsy printed clips do not increase stiffness.</em><br>
-                        <em style="display: inline-block; margin-top: 3px;">* ACM/PC composite panels provide less than half the shear rigidity of solid aluminum.</em>
+                        <em class="note-em">* ACM/PC composite panels provide less than half the shear rigidity of solid aluminum.</em>
                     </div>
                 </div>
 
@@ -187,8 +200,8 @@
                                 <span id="motor-current-val" class="value-display">100%</span>
                             </label>
                             <input type="range" id="motor-current" min="10" max="150" step="1" value="100">
-                            <div class="tension-display" style="text-align: left; margin-top: 4px;">
-                                <span style="font-size: 11px; color: var(--text-secondary); line-height: 1.3;">
+                            <div class="help-text-block">
+                                <span class="help-text">
                                     Scales holding torque. Models magnetic saturation diminishing returns above 100%.
                                 </span>
                             </div>
@@ -199,19 +212,19 @@
                 <details class="sub-category">
                     <summary>Experimental Physics (Advanced)</summary>
                     <div class="sub-category-content">
-                        <div class="control-group" style="flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px;">
-                            <input type="checkbox" id="enable-dynamic-speed" style="width: auto; cursor: pointer;">
-                            <label for="enable-dynamic-speed" style="margin-bottom: 0; cursor: pointer;">Enable Speed Simulation</label>
+                        <div class="control-group checkbox-group">
+                            <input type="checkbox" id="enable-dynamic-speed" class="checkbox-input">
+                            <label for="enable-dynamic-speed" class="checkbox-label">Enable Speed Simulation</label>
                         </div>
                         
-                        <div class="control-group" id="speed-slider-group" style="opacity: 0.5; pointer-events: none; transition: opacity 0.2s;">
+                        <div class="control-group disabled-group" id="speed-slider-group">
                             <label for="print-speed">
                                 <span>Print Speed (mm/s)</span>
                                 <span id="print-speed-val" class="value-display">100 mm/s</span>
                             </label>
                             <input type="range" id="print-speed" min="0" max="1000" step="10" value="100">
-                            <div class="tension-display" style="text-align: left; margin-top: 4px;">
-                                <span style="font-size: 11px; color: var(--text-secondary); line-height: 1.3;">
+                            <div class="help-text-block">
+                                <span class="help-text">
                                     Models Back-EMF torque loss and <b>Acceleration Smear</b>. Ringing begins at low speeds (corners) where torque is high, and decays as the printer accelerates and torque drops. This integrates multiple speeds to generate a widened, "smeared" resonance band, showing why static Input Shapers struggle at high speeds.
                                 </span>
                             </div>
@@ -221,10 +234,10 @@
                 
             </details>
             
-            <details class="control-section" open>
-                <summary><h3>Mechanical Imperfections<i class="ph ph-caret-down" style="margin-left: auto;"></i></h3></summary>
+            <details class="control-section">
+                <summary><h3>Mechanical Imperfections<i class="ph ph-caret-down ml-auto"></i></h3></summary>
                 
-                <details class="sub-category" open>
+                <details class="sub-category">
                     <summary>Toolhead & Gantry Mass</summary>
                     <div class="sub-category-content">
                         <div class="control-group">
@@ -258,8 +271,6 @@
                             </label>
                             <input type="range" id="toolhead-stiffness" min="0.5" max="2.5" step="0.1" value="1.0">
                         </div>
-
-
 
                         <div class="control-group">
                             <label for="gantry-racking">
@@ -342,7 +353,7 @@
             </details>
             
             <div class="control-section">
-                <div class="prediction-box" style="margin-top: 0;">
+                <div class="prediction-box mt-0">
                     <h4>Predicted Resonance</h4>
                     <div class="prediction-freq">
                         <span id="pred-x">X: -- Hz</span>
@@ -355,26 +366,37 @@
 
         <!-- Main Content -->
         <main class="main-content">
-            <header class="top-nav" style="display: flex; justify-content: space-between; align-items: center; background: rgba(25, 28, 41, 0.6); padding: 12px 20px; border-radius: 8px; margin-bottom: 15px;">
-                <div>
-                    <h1 style="margin: 0; font-size: 1.2rem; color: #fff;">Predicted ADXL Resonance</h1>
-                    <p style="margin: 4px 0 0; font-size: 0.85rem; color: var(--text-secondary);">Power Spectral Density Simulation</p>
+            <header class="top-nav">
+                <div class="top-nav-title">
+                    <h1>Predicted ADXL Resonance</h1>
+                    <p>Power Spectral Density Simulation</p>
                 </div>
-                <div style="display: flex; gap: 15px; align-items: center;">
-                    <div class="toggle-group" style="display: flex; gap: 5px; align-items: center; background: rgba(15,17,26,0.8); padding: 4px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);">
-                        <button id="btn-snapshot" style="background: transparent; color: #fff; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 0.85rem;"><i class="ph ph-camera"></i> Snapshot</button>
-                        <button id="btn-clear-snapshot" style="background: transparent; color: #ff4444; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 0.85rem; display: none;"><i class="ph ph-x-circle"></i> Clear</button>
+                <div class="top-nav-controls">
+                    <div class="toggle-group small-padding">
+                        <button id="btn-snapshot" class="nav-btn nav-btn-snapshot"><i class="ph ph-camera"></i> Snapshot</button>
+                        <button id="btn-clear-snapshot" class="nav-btn nav-btn-clear hidden"><i class="ph ph-x-circle"></i> Clear</button>
                     </div>
-                    <div class="toggle-group" style="display: flex; gap: 10px; align-items: center; background: rgba(15,17,26,0.8); padding: 6px 15px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1);">
-                        <span style="font-size: 0.9rem; color: #adb5bd;">Graph Mode:</span>
-                        <select id="graph-mode" style="background: transparent; border: none; color: #00f0ff; font-weight: bold; cursor: pointer; outline: none; font-size: 0.95rem;">
+                    <div class="toggle-group">
+                        <span class="toggle-label">Graph Mode:</span>
+                        <select id="graph-mode" class="toggle-select">
                             <option value="psd">Frequency (PSD)</option>
                             <option value="step">Time (Step Response)</option>
                         </select>
                     </div>
-                    <div class="toggle-group" style="display: flex; gap: 10px; align-items: center; background: rgba(15,17,26,0.8); padding: 6px 15px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1);">
-                        <span style="font-size: 0.9rem; color: #adb5bd;">View Axis:</span>
-                        <select id="axis-toggle" style="background: transparent; border: none; color: #00f0ff; font-weight: bold; cursor: pointer; outline: none; font-size: 0.95rem;">
+                    <div id="shaper-selector-container" class="toggle-group hidden">
+                        <span class="toggle-label">Shaper:</span>
+                        <select id="shaper-select" class="toggle-select">
+                            <option value="recommended">Recommended Best</option>
+                            <option value="zv">ZV</option>
+                            <option value="mzv">MZV</option>
+                            <option value="ei">EI</option>
+                            <option value="2hump_ei">2HUMP_EI</option>
+                            <option value="3hump_ei">3HUMP_EI</option>
+                        </select>
+                    </div>
+                    <div class="toggle-group">
+                        <span class="toggle-label">View Axis:</span>
+                        <select id="axis-toggle" class="toggle-select">
                             <option value="x">X Axis</option>
                             <option value="y">Y Axis</option>
                         </select>
@@ -389,20 +411,20 @@
                 <div class="panel">
                     <h3><i class="ph ph-info"></i> About the Math & Attribution</h3>
                     <p>This simulator runs a Javascript port of Klipper's internal <code>shaper_calibrate.py</code> math in real-time. The chart shows the maximum acceleration each shaper can sustain before it introduces too much smoothing (defined by the Smoothing Threshold) into your prints.</p>
-                    <p style="margin-top: 10px; font-size: 0.8rem; color: var(--text-secondary); border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">
-                        <strong>License & Attribution:</strong> This simulator is open-source and licensed under the <a href="https://github.com/Jumpybeetroot/shaper-sim/blob/main/LICENSE" target="_blank" style="color: var(--accent-primary); text-decoration: none;">GNU GPLv3 License</a>. The Input Shaper frequency response and scoring algorithms are mathematically ported directly from the source code of <a href="https://github.com/Klipper3d/klipper" target="_blank" style="color: var(--accent-primary); text-decoration: none;">Klipper3d</a>.
+                    <p class="license-text">
+                        <strong>License & Attribution:</strong> This simulator is open-source and licensed under the <a href="https://github.com/Jumpybeetroot/shaper-sim/blob/main/LICENSE" target="_blank">GNU GPLv3 License</a>. The Input Shaper frequency response and scoring algorithms are mathematically ported directly from the source code of <a href="https://github.com/Klipper3d/klipper" target="_blank">Klipper3d</a>.
                     </p>
                 </div>
                 <div class="panel">
                     <h3><i class="ph ph-warning-circle"></i> Predictive Mode</h3>
-                    <p>The mechanical predictions are rough estimates based on a simplified mass-spring system $f = \frac{1}{2\pi} \sqrt{K/M}$. Actual results will vary. Always use an ADXL345 accelerometer for precise tuning.</p>
+                    <p>The mechanical predictions are rough estimates based on a simplified mass-spring system <em>f = 1/(2&pi;) &radic;(K/M)</em>. Actual results will vary. Always use an ADXL345 accelerometer for precise tuning.</p>
                 </div>
             </div>
 
             <!-- Simulated Klipper Output -->
-            <div class="card" style="margin-top: 1.5rem; position: relative;">
-                <h2 style="margin: 0 0 1rem 0;">Simulated Klipper Output</h2>
-                <pre id="klipper-console" style="background: rgba(15,17,26,0.6); padding: 1.5rem; border-radius: 8px; color: #adb5bd; font-family: 'Fira Code', monospace; font-size: 0.9rem; overflow-x: auto; white-space: pre-wrap; line-height: 1.5; border: 1px solid rgba(255,255,255,0.05); margin: 0;">Waiting for prediction...</pre>
+            <div class="card">
+                <h2 class="card-title">Simulated Klipper Output</h2>
+                <pre id="klipper-console" class="klipper-console">Waiting for prediction...</pre>
             </div>
         </main>
     </div>

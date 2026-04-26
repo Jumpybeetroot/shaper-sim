@@ -261,7 +261,7 @@ const SHAPERS = {
 
 // --- PSD Simulation --- //
 
-function generate_psd_curve(center_freq, freqs, imperfections = {}) {
+function generate_psd_curve(center_freq, freqs, imperfections = {}, out_psd = null) {
     const {
         axis = 'x',
         toolhead_mass = 500,
@@ -291,7 +291,12 @@ function generate_psd_curve(center_freq, freqs, imperfections = {}) {
     // HWHM of the Lorentzian |H(ω)|² near resonance is ζ·f_n, not 2ζ·f_n.
     const w = center_freq * damping_ratio;
     
-    return freqs.map(f => {
+    if (!out_psd) {
+        out_psd = new Float64Array(freqs.length);
+    }
+
+    for (let i = 0; i < freqs.length; i++) {
+        const f = freqs[i];
         let val = 0;
         
         // 1. Primary Resonance Peak (Lorentzian)
@@ -311,7 +316,7 @@ function generate_psd_curve(center_freq, freqs, imperfections = {}) {
             // Amplitude ratio scales with the offset distance
             const twist_amp = base_amplitude * offset_factor * 0.8;  
             
-            const twist_w = twist_freq / (Q * 1.5); // Twist is usually less damped
+            const twist_w = twist_freq * damping_ratio * 1.333; // Twist is usually less damped
             val += twist_amp / (1.0 + Math.pow((f - twist_freq) / twist_w, 2.0));
         }
 
@@ -323,7 +328,7 @@ function generate_psd_curve(center_freq, freqs, imperfections = {}) {
             
             const cross_amp = base_amplitude * offset_factor * 0.4;
             
-            const cross_w = cross_freq / (Q * 1.5);
+            const cross_w = cross_freq * damping_ratio * 1.333;
             val += cross_amp / (1.0 + Math.pow((f - cross_freq) / cross_w, 2.0));
         }
 
@@ -334,7 +339,7 @@ function generate_psd_curve(center_freq, freqs, imperfections = {}) {
             const z_freq = center_freq * z_freq_multiplier;
             
             const z_amp = base_amplitude * offset_factor * 0.6; // More violent due to lever arm
-            const z_w = z_freq / (Q * 1.5);
+            const z_w = z_freq * damping_ratio * 1.333;
             val += z_amp / (1.0 + Math.pow((f - z_freq) / z_w, 2.0));
         }
 
@@ -346,7 +351,7 @@ function generate_psd_curve(center_freq, freqs, imperfections = {}) {
             
             // Squishy materials dynamically broaden the peak (lower Q factor) by introducing non-linear damping
             const broadening_factor = 1.0 + (squishy_materials / 20.0); 
-            const sway_w = sway_freq / (Q * (0.345 / broadening_factor)); // Very wide bandwidth because it's a slow wallow
+            const sway_w = sway_freq * damping_ratio * (5.8 * broadening_factor); // Very wide bandwidth because it's a slow wallow
             
             val += sway_amp / (1.0 + Math.pow((f - sway_freq) / sway_w, 2.0));
         }
@@ -362,7 +367,7 @@ function generate_psd_curve(center_freq, freqs, imperfections = {}) {
             const hose_broadening = 1.0 + (hose_squishy / 15.0);
             
             // Very low Q (high damping) because hoses absorb energy rather than ring
-            const drag_w = drag_freq / (Q * (0.1725 / hose_broadening));
+            const drag_w = drag_freq * damping_ratio * (11.6 * hose_broadening);
             
             val += drag_amp / (1.0 + Math.pow((f - drag_freq) / drag_w, 2.0));
         }
@@ -373,7 +378,7 @@ function generate_psd_curve(center_freq, freqs, imperfections = {}) {
             const delta_ratio = (belt_tension_delta / 100.0) * 0.5; 
             const peak2_freq = center_freq * (1.0 - delta_ratio);
             const peak2_amp = base_amplitude * 0.85; 
-            const peak2_w = peak2_freq / Q;
+            const peak2_w = peak2_freq * damping_ratio * 2.0;
             val += peak2_amp / (1.0 + Math.pow((f - peak2_freq) / peak2_w, 2.0));
         }
 
@@ -384,11 +389,13 @@ function generate_psd_curve(center_freq, freqs, imperfections = {}) {
             // Distinct secondary peak predominately on Y axis due to twisting racking modes
             const racking_freq = center_freq * 1.15;
             const racking_amp = base_amplitude * (gantry_racking / 100.0) * 0.9;
-            const racking_w = racking_freq / Q;
+            const racking_w = racking_freq * damping_ratio * 2.0;
             val += racking_amp / (1.0 + Math.pow((f - racking_freq) / racking_w, 2.0));
         }
-        return val;
-    });
+        
+        out_psd[i] = val;
+    }
+    return out_psd;
 }
 
 // --- Time Domain Simulation --- //
@@ -412,13 +419,15 @@ function generate_step_responses(center_freq, damping_ratio, shaper, t_max = 0.2
         for (let j = 0; j < shaper.A.length; j++) sum_A += shaper.A[j];
     }
     
-    const times = [];
-    const unshaped = [];
-    const shaped = [];
+    const num_steps = Math.floor(t_max / dt) + 1;
+    const times = new Float64Array(num_steps);
+    const unshaped = new Float64Array(num_steps);
+    const shaped = new Float64Array(num_steps);
     
-    for (let t = 0; t <= t_max; t += dt) {
-        times.push(t);
-        unshaped.push(_evaluate_step(t, wn, wd, dr, z_over_sqrt));
+    for (let i = 0; i < num_steps; i++) {
+        const t = i * dt;
+        times[i] = t;
+        unshaped[i] = _evaluate_step(t, wn, wd, dr, z_over_sqrt);
         
         let y_shaped = 0;
         if (shaper && shaper.A && shaper.T && sum_A > 0) {
@@ -426,9 +435,9 @@ function generate_step_responses(center_freq, damping_ratio, shaper, t_max = 0.2
                 y_shaped += (shaper.A[j] / sum_A) * _evaluate_step(t - shaper.T[j], wn, wd, dr, z_over_sqrt);
             }
         } else {
-            y_shaped = unshaped[unshaped.length - 1]; // Fallback
+            y_shaped = unshaped[i]; // Fallback
         }
-        shaped.push(y_shaped);
+        shaped[i] = y_shaped;
     }
     
     return { times, unshaped, shaped };
@@ -439,20 +448,23 @@ function generate_step_responses(center_freq, damping_ratio, shaper, t_max = 0.2
 // damping ratio. The impulse sequence is damping-weighted
 // (W_i = A_i * exp(-damping * (T_last - T_i))) and frequency is the
 // damped natural frequency omega_d = omega * sqrt(1 - dr^2).
-function estimate_shaper(shaper, test_damping_ratio, freqs) {
+function estimate_shaper(shaper, test_damping_ratio, freqs, memo = null) {
     const { A, T } = shaper;
     const n = A.length;
     let sum_A = 0.0;
     for (let i = 0; i < n; i++) sum_A += A[i];
     const inv_D = 1.0 / sum_A;
     const T_last = T[n - 1];
+    
+    const useMemo = memo && memo.length === freqs.length;
     const df = Math.sqrt(1.0 - test_damping_ratio * test_damping_ratio);
 
     const out = new Float64Array(freqs.length);
     for (let k = 0; k < freqs.length; k++) {
-        const omega = 2.0 * Math.PI * freqs[k];
-        const damping = test_damping_ratio * omega;
-        const omega_d = omega * df;
+        const omega = useMemo ? memo.omega[k] : 2.0 * Math.PI * freqs[k];
+        const damping = useMemo ? memo.damping[k] : test_damping_ratio * omega;
+        const omega_d = useMemo ? memo.omega_d[k] : omega * df;
+        
         let S = 0.0;
         let C = 0.0;
         for (let i = 0; i < n; i++) {
@@ -468,8 +480,8 @@ function estimate_shaper(shaper, test_damping_ratio, freqs) {
 // Ported from Klipper's ShaperCalibrate._estimate_remaining_vibrations.
 // Returns { fraction, vals } where `fraction` is in [0, 1]; callers that
 // want a percentage should multiply by 100 at the display site.
-function estimate_remaining_vibrations(shaper, test_damping_ratio, freqs, psd) {
-    const vals = estimate_shaper(shaper, test_damping_ratio, freqs);
+function estimate_remaining_vibrations(shaper, test_damping_ratio, freqs, psd, memo = null) {
+    const vals = estimate_shaper(shaper, test_damping_ratio, freqs, memo);
     let psd_max = 0.0;
     for (let i = 0; i < psd.length; i++) if (psd[i] > psd_max) psd_max = psd[i];
     const vibr_threshold = psd_max / SHAPER_VIBRATION_REDUCTION;
