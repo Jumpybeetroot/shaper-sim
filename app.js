@@ -223,7 +223,15 @@ const els = {
     btnSaveProfile: document.getElementById('save-profile-btn'),
     btnDeleteProfile: document.getElementById('delete-profile-btn'),
     btnSnapshot: document.getElementById('btn-snapshot'),
-    btnClearSnapshot: document.getElementById('btn-clear-snapshot')
+    btnClearSnapshot: document.getElementById('btn-clear-snapshot'),
+    
+    // Real Data Import
+    dropZone: document.getElementById('drop-zone'),
+    csvUpload: document.getElementById('csv-upload'),
+    normalizeHeights: document.getElementById('normalize-heights'),
+    importedDataInfo: document.getElementById('imported-data-info'),
+    fileNameDisplay: document.getElementById('file-name-display'),
+    btnClearCsv: document.getElementById('clear-csv-btn')
 };
 
 // Colors matching CSS
@@ -654,6 +662,64 @@ els.motorPreset.addEventListener('change', (e) => {
 els.motorTorque.addEventListener('input', () => { els.motorPreset.value = 'custom'; });
 els.motorInertia.addEventListener('input', () => { els.motorPreset.value = 'custom'; });
 
+let importedRealData = null; // { freq, psd_x, psd_y, psd_z, psd_xyz, fileName }
+
+function handleCsvFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const text = e.target.result;
+        const lines = text.split('\n');
+        const data = {
+            freq: [],
+            psd_x: [],
+            psd_y: [],
+            psd_z: [],
+            psd_xyz: []
+        };
+        
+        let headerFound = false;
+        for (let line of lines) {
+            line = line.trim();
+            if (!line) continue;
+            if (line.startsWith('#')) {
+                if (line.includes('freq') && line.includes('psd_x')) {
+                    headerFound = true;
+                }
+                continue;
+            }
+            
+            const parts = line.split(',');
+            if (parts.length >= 2) {
+                const f = parseFloat(parts[0]);
+                if (isNaN(f)) continue;
+                data.freq.push(f);
+                data.psd_x.push(parseFloat(parts[1]) || 0);
+                if (parts.length >= 5) {
+                    data.psd_y.push(parseFloat(parts[2]) || 0);
+                    data.psd_z.push(parseFloat(parts[3]) || 0);
+                    data.psd_xyz.push(parseFloat(parts[4]) || 0);
+                } else {
+                    // Fallback for simpler CSVs
+                    data.psd_y.push(parseFloat(parts[2]) || 0);
+                    data.psd_z.push(0);
+                    data.psd_xyz.push(0);
+                }
+            }
+        }
+        
+        if (data.freq.length > 0) {
+            importedRealData = { ...data, fileName: file.name };
+            els.fileNameDisplay.textContent = file.name;
+            els.importedDataInfo.classList.remove('hidden');
+            requestChartData();
+        } else {
+            alert("No valid data found in CSV. Expected header: #freq,psd_x,psd_y,psd_z,psd_xyz");
+        }
+    };
+    reader.readAsText(file);
+}
+
 function generateChartData() {
     const viewAxis = els.axisToggle.value;
     const isStepMode = els.graphMode && els.graphMode.value === 'step';
@@ -796,6 +862,37 @@ function generateChartData() {
             });
         });
         
+        // --- Real Data Overlay ---
+        if (importedRealData) {
+            const axis = viewAxis === 'x' ? 'psd_x' : 'psd_y';
+            let realPsd = [...importedRealData[axis]];
+            
+            if (els.normalizeHeights && els.normalizeHeights.checked) {
+                // Scale factor = max(simulated) / max(csv)
+                let maxSim = 0;
+                for (let i = 0; i < psd.length; i++) if (psd[i] > maxSim) maxSim = psd[i];
+                
+                let maxReal = 0;
+                for (let i = 0; i < realPsd.length; i++) if (realPsd[i] > maxReal) maxReal = realPsd[i];
+                
+                if (maxReal > 0) {
+                    const factor = maxSim / maxReal;
+                    realPsd = realPsd.map(v => v * factor);
+                }
+            }
+
+            datasets.push({
+                label: `Real ADXL Data (${viewAxis.toUpperCase()})`,
+                data: importedRealData.freq.map((f, i) => ({x: f, y: realPsd[i]})),
+                borderColor: '#ffff00', // Bright yellow for contrast
+                borderWidth: 2,
+                fill: false,
+                pointRadius: 0,
+                pointHoverRadius: 4,
+                tension: 0.4
+            });
+        }
+
         chartInstance.data.labels = mathFreqs;
         chartInstance.data.datasets = datasets;
         chartInstance.options.scales.x.max = parseFloat(els.scaleX.value);
@@ -850,6 +947,32 @@ window.addEventListener('load', () => {
             els.btnClearSnapshot.classList.add('hidden');
             updatePredictions();
         });
+
+        // --- Real Data Import ---
+        els.dropZone.addEventListener('click', () => els.csvUpload.click());
+        els.csvUpload.addEventListener('change', (e) => handleCsvFile(e.target.files[0]));
+        
+        els.dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            els.dropZone.classList.add('dragover');
+        });
+        els.dropZone.addEventListener('dragleave', () => els.dropZone.classList.remove('dragover'));
+        els.dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            els.dropZone.classList.remove('dragover');
+            handleCsvFile(e.dataTransfer.files[0]);
+        });
+
+        els.btnClearCsv.addEventListener('click', () => {
+            importedRealData = null;
+            els.importedDataInfo.classList.add('hidden');
+            els.csvUpload.value = '';
+            requestChartData();
+        });
+
+        if (els.normalizeHeights) {
+            els.normalizeHeights.addEventListener('change', requestChartData);
+        }
 
         // --- Profiles (localStorage) ---
         const STORAGE_KEY = 'shaper_sim_profiles';

@@ -99,6 +99,28 @@
             </details>
 
             <details class="control-section" open>
+                <summary><h3><i class="ph ph-file-arrow-up"></i> Real Data Import<i class="ph ph-caret-down ml-auto"></i></h3></summary>
+                <div class="control-group">
+                    <div id="drop-zone" class="drop-zone">
+                        <i class="ph ph-cloud-arrow-up"></i>
+                        <span>Drop Klipper CSV here</span>
+                        <p>or click to browse</p>
+                    </div>
+                    <input type="file" id="csv-upload" hidden accept=".csv">
+                </div>
+                <div class="control-group checkbox-group">
+                    <input type="checkbox" id="normalize-heights" class="checkbox-input" checked>
+                    <label for="normalize-heights" class="checkbox-label">Normalize Heights</label>
+                </div>
+                <div id="imported-data-info" class="help-text-block hidden">
+                    <span class="help-text">
+                        <b>Imported:</b> <span id="file-name-display">--</span>
+                    </span>
+                    <button id="clear-csv-btn" class="btn-text mt-2"><i class="ph ph-trash"></i> Clear Data</button>
+                </div>
+            </details>
+
+            <details class="control-section" open>
                 <summary><h3><i class="ph ph-cube"></i> CoreXY Mechanicals<i class="ph ph-caret-down ml-auto"></i></h3></summary>
                 
                 <div class="control-group">
