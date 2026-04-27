@@ -172,6 +172,8 @@ function App() {
   const [workerResult, setWorkerResult] = useState<{
     predX: number;
     predY: number;
+    compX: { belt: number; frame: number; motor: number };
+    compY: { belt: number; frame: number; motor: number };
     freqs: Float64Array;
     psdX: Float64Array;
     psdY: Float64Array;
@@ -192,6 +194,8 @@ function App() {
           ...prev,
           predX: data.predX,
           predY: data.predY,
+          compX: data.compX,
+          compY: data.compY,
           freqs: data.freqs,
           psdX: data.psdX,
           psdY: data.psdY,
@@ -245,7 +249,7 @@ function App() {
     }
   }, [getSafeState]);
 
-  const { predX = 0, predY = 0, freqs = new Float64Array(0), psdX = new Float64Array(0), psdY = new Float64Array(0), psdX_nozzle = new Float64Array(0), psdY_nozzle = new Float64Array(0), scoreX = { results: {}, best_shaper: '' }, scoreY = { results: {}, best_shaper: '' } } = workerResult || {};
+  const { predX = 0, predY = 0, compX = { belt: 0, frame: 0, motor: 0 }, compY = { belt: 0, frame: 0, motor: 0 }, freqs = new Float64Array(0), psdX = new Float64Array(0), psdY = new Float64Array(0), psdX_nozzle = new Float64Array(0), psdY_nozzle = new Float64Array(0), scoreX = { results: {}, best_shaper: '' }, scoreY = { results: {}, best_shaper: '' } } = workerResult || {};
 
   const chartData = useMemo(() => {
     if (!workerResult) return { labels: [], datasets: [] };
@@ -561,6 +565,8 @@ function App() {
         resetToDefault={resetToDefault}
         predX={predX} 
         predY={predY}
+        compX={compX}
+        compY={compY}
         scoreX={scoreX}
         scoreY={scoreY}
         profiles={Object.keys(profiles)}

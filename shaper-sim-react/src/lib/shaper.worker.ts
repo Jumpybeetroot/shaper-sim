@@ -8,7 +8,7 @@ self.onmessage = (e: MessageEvent<{type: string, state: AppState}>) => {
     const beltDensity = getBeltDensity(state.beltType);
     const tensionN = getBeltTensionN(state.beltType, state.beltTune);
 
-    const predX = predict_resonance(
+    const { f: predX, compliance: compX } = predict_resonance(
       state.toolheadWeight,
       state.beltType,
       tensionN,
@@ -24,7 +24,7 @@ self.onmessage = (e: MessageEvent<{type: string, state: AppState}>) => {
       state.enableDynamicSpeed ? state.printSpeed : 0
     );
 
-    const predY = predict_resonance(
+    const { f: predY, compliance: compY } = predict_resonance(
       state.toolheadWeight + state.yGantryWeight,
       state.beltType,
       tensionN,
@@ -88,6 +88,8 @@ self.onmessage = (e: MessageEvent<{type: string, state: AppState}>) => {
             type: 'PSD',
             predX,
             predY,
+            compX,
+            compY,
             freqs,
             psdX: psdX_adxl,
             psdY: psdY_adxl,

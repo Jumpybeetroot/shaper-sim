@@ -217,7 +217,7 @@ export function find_shaper_max_accel(shaper: Shaper, scv: number): number {
 
 // --- Predictive Mechanical Model --- //
 
-export function predict_resonance(mass_g: number, belt_EA: number, tension_N: number, frame_multiplier: number, belt_length_mm: number, drive_type: number = 2, motor_torque_mNm: number = 550, motor_current_pct: number = 70, motor_rotor_teeth: number = 50, pulley_teeth: number = 20, motor_inertia_g_cm2: number = 84.5, belt_density_kg_m: number = 0.0012, print_speed: number = 0): number {
+export function predict_resonance(mass_g: number, belt_EA: number, tension_N: number, frame_multiplier: number, belt_length_mm: number, drive_type: number = 2, motor_torque_mNm: number = 550, motor_current_pct: number = 70, motor_rotor_teeth: number = 50, pulley_teeth: number = 20, motor_inertia_g_cm2: number = 84.5, belt_density_kg_m: number = 0.0012, print_speed: number = 0): { f: number, compliance: { belt: number, frame: number, motor: number } } {
     let M = mass_g / 1000.0;
     const L = belt_length_mm / 1000.0;
     
@@ -262,7 +262,20 @@ export function predict_resonance(mass_g: number, belt_EA: number, tension_N: nu
     M = M + (Mrotor_total * inertial_coupling_factor) + Mbelt_total;
     
     const f = (1.0 / (2.0 * Math.PI)) * Math.sqrt(Keff / M);
-    return f;
+
+    const C_belt = 1.0 / Kbelt;
+    const C_frame = 1.0 / Kframe;
+    const C_motor = 1.0 / Kmotor_total;
+    const C_total = C_belt + C_frame + C_motor;
+
+    return {
+        f,
+        compliance: {
+            belt: (C_belt / C_total) * 100,
+            frame: (C_frame / C_total) * 100,
+            motor: (C_motor / C_total) * 100
+        }
+    };
 }
 
 export const SHAPERS: Record<string, (f: number, d: number) => Shaper> = {
