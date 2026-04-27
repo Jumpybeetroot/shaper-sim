@@ -250,6 +250,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </label>
               <input type="range" id="printSpeed" min="0" max="1000" step="10" value={state.printSpeed} onChange={handleChange} disabled={!state.enableDynamicSpeed} />
             </div>
+            <div className="control-group">
+              <label htmlFor="twistX"><span>X COM Offset (mm)</span><span className="value-display">{state.twistX} mm</span></label>
+              <input type="range" id="twistX" min="0" max="60" step="1" value={state.twistX} onChange={handleChange} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="twistY"><span>Y COM Offset (mm)</span><span className="value-display">{state.twistY} mm</span></label>
+              <input type="range" id="twistY" min="0" max="60" step="1" value={state.twistY} onChange={handleChange} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="twistZ"><span>Z COM Offset (mm)</span><span className="value-display">{state.twistZ} mm</span></label>
+              <input type="range" id="twistZ" min="0" max="60" step="1" value={state.twistZ} onChange={handleChange} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="toolheadStiffness"><span>Toolhead Material Stiffness</span><span className="value-display">{state.toolheadStiffness.toFixed(1)}x</span></label>
+              <input type="range" id="toolheadStiffness" min="0.5" max="2.5" step="0.1" value={state.toolheadStiffness} onChange={handleChange} />
+            </div>
           </div>
         </details>
       </details>
@@ -269,28 +285,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="control-group">
               <label htmlFor="gantryRacking"><span>Gantry Racking (Y only)</span><span className="value-display">{state.gantryRacking}%</span></label>
               <input type="range" id="gantryRacking" min="0" max="100" step="5" value={state.gantryRacking} onChange={handleChange} />
-            </div>
-          </div>
-        </details>
-
-        <details className="sub-category">
-          <summary>Mechanical Play & Twist</summary>
-          <div className="sub-category-content">
-            <div className="control-group">
-              <label htmlFor="twistX"><span>X Twist Offset</span><span className="value-display">{state.twistX} mm</span></label>
-              <input type="range" id="twistX" min="0" max="50" step="1" value={state.twistX} onChange={handleChange} />
-            </div>
-            <div className="control-group">
-              <label htmlFor="twistY"><span>Y Twist Offset</span><span className="value-display">{state.twistY} mm</span></label>
-              <input type="range" id="twistY" min="0" max="50" step="1" value={state.twistY} onChange={handleChange} />
-            </div>
-            <div className="control-group">
-              <label htmlFor="twistZ"><span>Z Twist Offset (Tall)</span><span className="value-display">{state.twistZ} mm</span></label>
-              <input type="range" id="twistZ" min="0" max="50" step="1" value={state.twistZ} onChange={handleChange} />
-            </div>
-            <div className="control-group">
-              <label htmlFor="toolheadStiffness"><span>Toolhead Stiffness</span><span className="value-display">{state.toolheadStiffness.toFixed(1)}x</span></label>
-              <input type="range" id="toolheadStiffness" min="0.2" max="3.0" step="0.1" value={state.toolheadStiffness} onChange={handleChange} />
             </div>
           </div>
         </details>
