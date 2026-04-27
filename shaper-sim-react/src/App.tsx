@@ -3,8 +3,8 @@ import { Sidebar } from './components/Sidebar';
 import { ChartDisplay } from './components/ChartDisplay';
 import { defaultState } from './types';
 import type { AppState } from './types';
-import { predict_resonance, generate_psd_curve, SHAPERS, estimate_shaper, generate_step_responses, scoreShapers } from './lib/shaperLogic';
-import type { Imperfections, ShaperScore } from './lib/shaperLogic';
+import { SHAPERS, DEFAULT_DAMPING_RATIO, estimate_shaper, generate_step_responses } from './lib/shaperLogic';
+import type { ShaperScore } from './lib/shaperLogic';
 import { Info, WarningCircle, Camera, XCircle } from '@phosphor-icons/react';
 
 const colors: Record<string, string> = {
@@ -29,7 +29,7 @@ function App() {
   const [viewAxis, setViewAxis] = useState<'x' | 'y'>('x');
   const [selectedShaper, setSelectedShaper] = useState<string>('recommended');
   
-  const [snapshotData, setSnapshotData] = useState<{psdX: number[], psdY: number[], freqs: number[]} | null>(null);
+  const [snapshotData, setSnapshotData] = useState<{psdX: Float64Array, psdY: Float64Array, freqs: Float64Array} | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('shaperSim_state');
@@ -39,7 +39,10 @@ function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('shaperSim_state', JSON.stringify(state));
+    const handler = setTimeout(() => {
+      localStorage.setItem('shaperSim_state', JSON.stringify(state));
+    }, 300);
+    return () => clearTimeout(handler);
   }, [state]);
 
   const [profiles, setProfiles] = useState<Record<string, AppState>>(() => {
@@ -81,90 +84,103 @@ function App() {
     setState(prev => ({ ...prev, [key]: finalValue }));
   }, []);
 
-  const predX = useMemo(() => {
-    let beltDensity = 0.0084; // default 6mm
-    if (state.beltType === 18000) beltDensity = 0.0126; // 9mm
-    else if (state.beltType === 20000) beltDensity = 0.0140; // 10mm
-    else if (state.beltType === 25000) beltDensity = 0.0168; // 12mm
+  const resetToDefault = useCallback(() => {
+    if (window.confirm('Reset all simulation parameters to defaults?')) {
+      setState(defaultState);
+    }
+  }, []);
 
-    const tensionN = 4 * beltDensity * Math.pow(0.15, 2) * Math.pow(state.beltTune, 2);
+  const [workerResult, setWorkerResult] = useState<{
+    predX: number;
+    predY: number;
+    freqs: Float64Array;
+    psdX: Float64Array;
+    psdY: Float64Array;
+    scoreX: { results: Record<string, ShaperScore>; best_shaper: string };
+    scoreY: { results: Record<string, ShaperScore>; best_shaper: string };
+  } | null>(null);
 
-    return predict_resonance(
-      state.toolheadWeight,
-      state.beltType,
-      tensionN,
-      state.frameStiffness,
-      state.beltLength,
-      state.driveType,
-      state.motorTorque,
-      state.motorCurrent,
-      50,
-      20,
-      state.motorInertia
-    );
-  }, [state]);
+  const workerRef = useRef<Worker | null>(null);
 
-  const predY = useMemo(() => {
-    let beltDensity = 0.0084;
-    if (state.beltType === 18000) beltDensity = 0.0126;
-    else if (state.beltType === 20000) beltDensity = 0.0140;
-    else if (state.beltType === 25000) beltDensity = 0.0168;
-
-    const tensionN = 4 * beltDensity * Math.pow(0.15, 2) * Math.pow(state.beltTune, 2);
-
-    return predict_resonance(
-      state.toolheadWeight + state.yGantryWeight,
-      state.beltType,
-      tensionN,
-      state.frameStiffness,
-      state.beltLength,
-      state.driveType,
-      state.motorTorque,
-      state.motorCurrent,
-      50,
-      20,
-      state.motorInertia
-    );
-  }, [state]);
-
-  const baseMath = useMemo(() => {
-    const safeMaxX = Math.min(1000, Math.max(10, state.maxX || 0));
-    const freqs = Array.from({ length: Math.floor(safeMaxX / 0.5) }, (_, i) => (i + 1) * 0.5);
-    const centerFreq = viewAxis === 'x' ? predX : predY;
-
-    const imperfections: Imperfections = {
-      external_sway: state.externalSway,
-      external_sway_freq: state.externalSwayFreq,
-      hose_drag: state.hoseDrag,
-      hose_drag_freq: state.hoseDragFreq,
-      hose_squishy: state.hoseSquishy,
-      squishy_materials: state.squishyFeet,
-      toolhead_stiffness: state.toolheadStiffness,
-      belt_tension_delta: state.beltTensionDiff,
-      z_twist: state.twistZ,
-      damping_ratio: state.dampingRatio
+  useEffect(() => {
+    workerRef.current = new Worker(new URL('./lib/shaper.worker.ts', import.meta.url), { type: 'module' });
+    workerRef.current.onmessage = (e) => {
+      const data = e.data;
+      if (data.type === 'PSD') {
+        setWorkerResult(prev => ({
+          ...prev,
+          predX: data.predX,
+          predY: data.predY,
+          freqs: data.freqs,
+          psdX: data.psdX,
+          psdY: data.psdY,
+          scoreX: prev?.scoreX || { results: {}, best_shaper: '' },
+          scoreY: prev?.scoreY || { results: {}, best_shaper: '' }
+        }));
+      } else if (data.type === 'SHAPERS') {
+        setWorkerResult(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            scoreX: data.scoreX,
+            scoreY: data.scoreY
+          };
+        });
+      }
     };
+    return () => {
+      workerRef.current?.terminate();
+    };
+  }, []);
 
-    const psdX = generate_psd_curve(predX, freqs, { ...imperfections, axis: 'x', toolhead_twist: state.twistX, gantry_racking: 0 });
-    const psdY = generate_psd_curve(predY, freqs, { ...imperfections, axis: 'y', toolhead_twist: state.twistY, gantry_racking: state.gantryRacking });
+  // Instant PSD update for smooth graph interaction
+  useEffect(() => {
+    if (workerRef.current) {
+      const safeState = { ...state };
+      for (const key in safeState) {
+        const k = key as keyof AppState;
+        if (typeof safeState[k] === 'number' && isNaN(safeState[k] as number)) {
+          (safeState as any)[k] = defaultState[k];
+        }
+      }
+      workerRef.current.postMessage({ type: 'PSD', state: safeState });
+    }
+  }, [state]);
 
-    const scoreX = scoreShapers(predX, psdX, freqs, state.maxX, state.scv, state.dampingRatio);
-    const scoreY = scoreShapers(predY, psdY, freqs, state.maxX, state.scv, state.dampingRatio);
+  // Debounced SHAPERS update for heavy math
+  useEffect(() => {
+    if (workerRef.current) {
+      const handler = setTimeout(() => {
+        const safeState = { ...state };
+        for (const key in safeState) {
+          const k = key as keyof AppState;
+          if (typeof safeState[k] === 'number' && isNaN(safeState[k] as number)) {
+            (safeState as any)[k] = defaultState[k];
+          }
+        }
+        workerRef.current?.postMessage({ type: 'SHAPERS', state: safeState });
+      }, 150);
+      return () => clearTimeout(handler);
+    }
+  }, [state]);
 
-    return { freqs, centerFreq, psdX, psdY, scoreX, scoreY };
-  }, [state, predX, predY, viewAxis]);
-
-  const { freqs, centerFreq, psdX, psdY, scoreX, scoreY } = baseMath;
+  const { predX = 0, predY = 0, freqs = new Float64Array(0), psdX = new Float64Array(0), psdY = new Float64Array(0), scoreX = { results: {}, best_shaper: '' }, scoreY = { results: {}, best_shaper: '' } } = workerResult || {};
 
   const chartData = useMemo(() => {
+    if (!workerResult) return { labels: [], datasets: [] };
+    const centerFreq = viewAxis === 'x' ? predX : predY;
     const psd = viewAxis === 'x' ? psdX : psdY;
     const recommendedShaper = viewAxis === 'x' ? scoreX.best_shaper : scoreY.best_shaper;
     const activeShaper = selectedShaper === 'recommended' ? recommendedShaper : selectedShaper;
 
     if (graphMode === 'step') {
-      const { times, unshaped, shaped } = generate_step_responses(centerFreq, state.dampingRatio, null, 0.250, 0.0005);
+      const score = viewAxis === 'x' ? scoreX : scoreY;
+      const shaperFunc = SHAPERS[activeShaper];
+      const shaperFreq = score?.results?.[activeShaper]?.freq ?? centerFreq;
+      const shaper = shaperFunc ? shaperFunc(shaperFreq, DEFAULT_DAMPING_RATIO) : null;
+      const { times, unshaped, shaped: shapedResponse } = generate_step_responses(centerFreq, state.dampingRatio, shaper, 0.250, 0.0005);
       const timeMs = Array.from(times, t => t * 1000);
-      
+
       const datasets = [
         {
           label: 'Unshaped Step Response',
@@ -176,10 +192,6 @@ function App() {
           pointRadius: 0,
         }
       ];
-
-      const shaperFunc = SHAPERS[activeShaper];
-      const shaper = shaperFunc ? shaperFunc(centerFreq, state.dampingRatio) : null;
-      const { shaped: shapedResponse } = generate_step_responses(centerFreq, state.dampingRatio, shaper, 0.250, 0.0005);
       
       datasets.push({
         label: `Shaped (${shaperNames[activeShaper] || activeShaper})`,
@@ -196,7 +208,7 @@ function App() {
       const datasets: any[] = [
         {
           label: `Raw PSD (${viewAxis.toUpperCase()})`,
-          data: freqs.map((f, i) => ({ x: f, y: psd[i] })),
+          data: Array.from(freqs).map((f, i) => ({ x: f, y: psd[i] })),
           borderColor: '#ffffff',
           backgroundColor: 'rgba(255, 255, 255, 0.05)',
           fill: true,
@@ -209,7 +221,7 @@ function App() {
         const snapPsd = viewAxis === 'x' ? snapshotData.psdX : snapshotData.psdY;
         datasets.push({
           label: `Snapshot (${viewAxis.toUpperCase()})`,
-          data: snapshotData.freqs.map((f, i) => ({ x: f, y: snapPsd[i] })),
+          data: Array.from(snapshotData.freqs).map((f, i) => ({ x: f, y: snapPsd[i] })),
           borderColor: '#888888',
           borderWidth: 1.5,
           borderDash: [5, 5],
@@ -218,16 +230,19 @@ function App() {
         });
       }
 
+      const score = viewAxis === 'x' ? scoreX : scoreY;
       Object.keys(SHAPERS).forEach(shaperName => {
         const shaperFunc = SHAPERS[shaperName];
-        const shaper = shaperFunc(centerFreq, state.dampingRatio);
+        const shaperFreq = score?.results?.[shaperName]?.freq ?? centerFreq;
+        const shaper = shaperFunc(shaperFreq, DEFAULT_DAMPING_RATIO);
         const response = estimate_shaper(shaper, state.dampingRatio, freqs);
-        const smoothedPsd = psd.map((val, i) => val * response[i]);
+        const smoothedPsd = new Float64Array(psd.length);
+        for (let i = 0; i < psd.length; i++) smoothedPsd[i] = psd[i] * response[i];
         
         if (shaperName === activeShaper) {
           datasets.push({
             label: `After shaper (${shaperNames[shaperName]})`,
-            data: freqs.map((f, i) => ({ x: f, y: smoothedPsd[i] })),
+            data: Array.from(freqs).map((f, i) => ({ x: f, y: smoothedPsd[i] })),
             borderColor: '#00ffff', // Cyan, just like Klipper's graph
             borderWidth: 2,
             borderDash: [5, 5],
@@ -237,7 +252,7 @@ function App() {
         } else {
           datasets.push({
             label: shaperNames[shaperName],
-            data: freqs.map((f, i) => ({ x: f, y: smoothedPsd[i] })),
+            data: Array.from(freqs).map((f, i) => ({ x: f, y: smoothedPsd[i] })),
             borderColor: colors[shaperName],
             borderWidth: 1.5,
             borderDash: [3, 3],
@@ -250,7 +265,7 @@ function App() {
 
       return { labels: [], datasets };
     }
-  }, [state.dampingRatio, centerFreq, freqs, graphMode, psdX, psdY, scoreX.best_shaper, scoreY.best_shaper, selectedShaper, viewAxis, snapshotData]);
+  }, [state.dampingRatio, workerResult, graphMode, selectedShaper, viewAxis, snapshotData]);
 
   const chartOptions = useMemo(() => {
     const isStep = graphMode === 'step';
@@ -280,6 +295,7 @@ function App() {
         legend: {
           position: 'top',
           labels: {
+            color: 'rgba(255, 255, 255, 0.9)',
             usePointStyle: true,
             padding: 20,
             font: { size: 13, weight: '500' }
@@ -298,19 +314,21 @@ function App() {
       scales: {
         x: {
           type: 'linear' as const,
-          title: { display: true, text: isStep ? 'Time (ms)' : 'Frequency (Hz)' },
+          title: { display: true, text: isStep ? 'Time (ms)' : 'Frequency (Hz)', color: 'rgba(255, 255, 255, 0.9)', font: { weight: 'bold' } },
           max: isStep ? undefined : state.maxX,
-          ticks: { maxTicksLimit: isStep ? 20 : undefined },
+          ticks: { maxTicksLimit: isStep ? 20 : undefined, color: 'rgba(255, 255, 255, 0.7)' },
           grid: { color: 'rgba(255, 255, 255, 0.05)' }
         },
         y: {
           title: { 
               display: true, 
-              text: isStep ? 'Position (Step Response)' : `Power spectral density (1e${psdExponent})` 
+              text: isStep ? 'Position (Step Response)' : `Power spectral density (1e${psdExponent})`,
+              color: 'rgba(255, 255, 255, 0.9)', font: { weight: 'bold' }
           },
           beginAtZero: true,
           grid: { color: 'rgba(255, 255, 255, 0.05)' },
           ticks: {
+            color: 'rgba(255, 255, 255, 0.7)',
             callback: function(value: any) {
               if (isStep) return value.toFixed(2);
               if (value === 0) return '0.0';
@@ -395,6 +413,7 @@ function App() {
   }, [predX, predY, viewAxis, graphMode, psdX, psdY]);
 
   const klipperConsoleOutput = useMemo(() => {
+    if (!workerResult || !scoreX.best_shaper || !scoreY.best_shaper) return 'Calculating shaper recommendations...';
     const displayAccel = (a: number) => Math.round(a / 100.0) * 100.0;
     
     let out = `Calculating shaper recommendations based on predicted ADXL PSD physics...\n\n`;
@@ -424,6 +443,7 @@ function App() {
       <Sidebar 
         state={state} 
         updateState={updateState} 
+        resetToDefault={resetToDefault}
         predX={predX} 
         predY={predY}
         scoreX={scoreX}
@@ -447,7 +467,15 @@ function App() {
                   <XCircle weight="bold" /> Clear
                 </button>
               ) : (
-                <button className="nav-btn nav-btn-snapshot" onClick={() => setSnapshotData({ psdX: [...psdX], psdY: [...psdY], freqs: [...freqs] })}>
+                <button className="nav-btn nav-btn-snapshot" onClick={() => {
+                  if (workerResult) {
+                    setSnapshotData({ 
+                      psdX: new Float64Array(workerResult.psdX), 
+                      psdY: new Float64Array(workerResult.psdY), 
+                      freqs: new Float64Array(workerResult.freqs) 
+                    });
+                  }
+                }}>
                   <Camera weight="bold" /> Snapshot
                 </button>
               )}

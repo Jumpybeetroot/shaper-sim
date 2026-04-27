@@ -394,7 +394,7 @@ export function generate_step_responses(center_freq: number, damping_ratio: numb
     return { times, unshaped, shaped };
 }
 
-export function estimate_shaper(shaper: Shaper, test_damping_ratio: number, freqs: Float64Array | number[], memo: any = null, outBuffer: Float64Array | null = null): Float64Array {
+export function estimate_shaper(shaper: Shaper, test_damping_ratio: number, freqs: Float64Array | number[], memo: { omega: Float64Array, damping: Float64Array, omega_d: Float64Array, length: number } | null = null, outBuffer: Float64Array | null = null): Float64Array {
     const { A, T } = shaper;
     const n = A.length;
     let sum_A = 0.0;
@@ -423,7 +423,7 @@ export function estimate_shaper(shaper: Shaper, test_damping_ratio: number, freq
     return out;
 }
 
-export function estimate_remaining_vibrations(shaper: Shaper, test_damping_ratio: number, freqs: Float64Array | number[], psd: Float64Array | number[], memo: any = null, outBuffer: Float64Array | null = null): { fraction: number, vals: Float64Array } {
+export function estimate_remaining_vibrations(shaper: Shaper, test_damping_ratio: number, freqs: Float64Array | number[], psd: Float64Array | number[], memo: { omega: Float64Array, damping: Float64Array, omega_d: Float64Array, length: number } | null = null, outBuffer: Float64Array | null = null): { fraction: number, vals: Float64Array } {
     const vals = estimate_shaper(shaper, test_damping_ratio, freqs, memo, outBuffer);
     let psd_max = 0.0;
     for (let i = 0; i < psd.length; i++) if (psd[i] > psd_max) psd_max = psd[i];
@@ -448,10 +448,10 @@ export interface ShaperScore {
     freq: number;
 }
 
-export function scoreShapers(axisFreq: number, rawPsd: Float64Array | number[], freqs: Float64Array | number[], max_hz: number, scv: number, damping: number): { results: Record<string, ShaperScore>, best_shaper: string } {
+export function scoreShapers(rawPsd: Float64Array | number[], freqs: Float64Array | number[], max_hz: number, scv: number): { results: Record<string, ShaperScore>, best_shaper: string } {
     let best_shaper = '';
-    let best_shaper_obj: any = null;
-    let all_shapers: any[] = [];
+    let best_shaper_obj: ShaperScore & { name: string, score: number } | null = null;
+    let all_shapers: (ShaperScore & { name: string, score: number })[] = [];
     let results: Record<string, ShaperScore> = {};
 
     // Memoize the frequency math once for all shaper iterations
@@ -471,8 +471,8 @@ export function scoreShapers(axisFreq: number, rawPsd: Float64Array | number[], 
     const valsBuffer = new Float64Array(freqs.length);
 
     for (const s of Object.keys(SHAPERS)) {
-        let best_res: any = null;
-        const test_results: any[] = [];
+        let best_res: { freq: number, vibrs: number, smoothing: number, score: number, max_accel: number } | null = null;
+        const test_results: { freq: number, vibrs: number, smoothing: number, score: number, max_accel: number }[] = [];
 
         const testFreq = (f_test: number) => {
             const shaper = SHAPERS[s](f_test, DEFAULT_DAMPING_RATIO);
