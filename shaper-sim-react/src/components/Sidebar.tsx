@@ -137,9 +137,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ state, updateState, predX, pre
           </select>
         </div>
         <div className="control-group">
-          <label htmlFor="beltTune">Gates Belt Tune (Hz @ 150mm span)</label>
+          <label htmlFor="beltTune">
+            <span>Gates Belt Tune (Hz @ 150mm span)</span>
+            <span className="value-display">{state.beltTune} Hz</span>
+          </label>
           <input type="range" id="beltTune" min="50" max="400" step="1" value={state.beltTune} onChange={handleChange} />
-          <div className="tension-display"><span>{state.beltTune} Hz</span></div>
+          <div className="tension-display">
+            <span>{state.beltTune} Hz (~{(() => {
+              let beltDensity = 0.0084;
+              if (state.beltType === 18000) beltDensity = 0.0126;
+              else if (state.beltType === 20000) beltDensity = 0.0140;
+              else if (state.beltType === 25000) beltDensity = 0.0168;
+              return (4 * beltDensity * Math.pow(0.15, 2) * Math.pow(state.beltTune, 2)).toFixed(1);
+            })()} N)</span>
+          </div>
         </div>
         <div className="control-group">
           <label htmlFor="frameStiffness">Frame Stiffness</label>

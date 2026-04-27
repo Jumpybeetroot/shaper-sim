@@ -82,10 +82,17 @@ function App() {
   }, []);
 
   const predX = useMemo(() => {
+    let beltDensity = 0.0084; // default 6mm
+    if (state.beltType === 18000) beltDensity = 0.0126; // 9mm
+    else if (state.beltType === 20000) beltDensity = 0.0140; // 10mm
+    else if (state.beltType === 25000) beltDensity = 0.0168; // 12mm
+
+    const tensionN = 4 * beltDensity * Math.pow(0.15, 2) * Math.pow(state.beltTune, 2);
+
     return predict_resonance(
       state.toolheadWeight,
       state.beltType,
-      state.beltTune * state.beltTune * state.beltLength * (state.beltType / 2000) * 0.000001,
+      tensionN,
       state.frameStiffness,
       state.beltLength,
       state.driveType,
@@ -98,10 +105,17 @@ function App() {
   }, [state]);
 
   const predY = useMemo(() => {
+    let beltDensity = 0.0084;
+    if (state.beltType === 18000) beltDensity = 0.0126;
+    else if (state.beltType === 20000) beltDensity = 0.0140;
+    else if (state.beltType === 25000) beltDensity = 0.0168;
+
+    const tensionN = 4 * beltDensity * Math.pow(0.15, 2) * Math.pow(state.beltTune, 2);
+
     return predict_resonance(
       state.toolheadWeight + state.yGantryWeight,
       state.beltType,
-      state.beltTune * state.beltTune * state.beltLength * (state.beltType / 2000) * 0.000001,
+      tensionN,
       state.frameStiffness,
       state.beltLength,
       state.driveType,
