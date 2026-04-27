@@ -1,14 +1,15 @@
 import React from 'react';
 import type { AppState } from '../types';
-import { CaretDown, FloppyDisk, Sliders, Cube, ChartLineUp, Trash } from '@phosphor-icons/react';
+import { CaretDown, FloppyDisk, Sliders, Cube, ChartLineUp, Trash, ArrowCounterClockwise, Waveform } from '@phosphor-icons/react';
 
 interface SidebarProps {
   state: AppState;
   updateState: (key: keyof AppState, value: number | boolean) => void;
+  resetToDefault: () => void;
   predX: number;
   predY: number;
-  scoreX: any;
-  scoreY: any;
+  scoreX: { results: Record<string, import('../lib/shaperLogic').ShaperScore>; best_shaper: string };
+  scoreY: { results: Record<string, import('../lib/shaperLogic').ShaperScore>; best_shaper: string };
   profiles: string[];
   saveProfile: (name: string) => void;
   loadProfile: (name: string) => void;
@@ -16,7 +17,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
-  state, updateState, predX, predY, scoreX, scoreY, profiles, saveProfile, loadProfile, deleteProfile 
+  state, updateState, resetToDefault, predX, predY, scoreX, scoreY, profiles, saveProfile, loadProfile, deleteProfile 
 }) => {
   const [selectedProfile, setSelectedProfile] = React.useState<string>('');
 
@@ -35,9 +36,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <div className="logo-section">
-          <ChartLineUp size={28} weight="duotone" />
-          <h2>ShaperSim</h2>
+        <div className="logo-section" style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          gap: '10px',
+          width: '100%', 
+          padding: '10px 0', 
+          marginBottom: '10px' 
+        }}>
+          <Waveform size={36} weight="duotone" color="#00ffff" style={{ filter: 'drop-shadow(0 0 8px rgba(0, 255, 255, 0.6))' }} />
+          <h2 style={{
+            margin: 0,
+            fontSize: '2rem',
+            fontWeight: 800,
+            fontFamily: '"Inter", "Roboto", sans-serif',
+            background: 'linear-gradient(90deg, #a855f7 0%, #06b6d4 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            filter: 'drop-shadow(0 0 8px rgba(168, 85, 247, 0.4))',
+            letterSpacing: '0.5px'
+          }}>
+            ShaperSim
+          </h2>
         </div>
       </div>
 
@@ -104,12 +125,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <summary>
           <h3><Sliders size={16} weight="duotone" /> Simulation Settings<CaretDown size={16} className="ml-auto ph-caret-down" /></h3>
         </summary>
+        <div className="control-group" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-5px', marginBottom: '10px' }}>
+          <button 
+            className="nav-btn nav-btn-clear" 
+            onClick={resetToDefault}
+            style={{ fontSize: '0.85rem', padding: '4px 8px' }}
+          >
+            <ArrowCounterClockwise size={14} weight="bold" style={{ marginRight: '4px' }} /> Reset All Defaults
+          </button>
+        </div>
         <div className="control-group">
           <label htmlFor="dampingRatio">
             <span>Damping Ratio</span>
             <span className="value-display">{state.dampingRatio.toFixed(3)}</span>
           </label>
           <input type="range" id="dampingRatio" min="0.010" max="0.200" step="0.005" value={state.dampingRatio} onChange={handleChange} />
+          <div className="tension-display" style={{ textAlign: 'left', marginTop: '4px' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.3' }}>
+              <b>Tip:</b> Rigid frames "ring" longer. Use lower values (0.04–0.07) for rigid billet frames, higher (0.10–0.15) for flexible bare/VHB frames.
+            </span>
+          </div>
         </div>
         <div className="control-group">
           <label htmlFor="scv">
@@ -180,6 +215,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="value-display">{state.frameStiffness.toFixed(1)}</span>
           </label>
           <input type="range" id="frameStiffness" min="0.5" max="10.0" step="0.1" value={state.frameStiffness} onChange={handleChange} />
+          <div className="tension-display" style={{ marginTop: '4px' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'left', lineHeight: '1.3' }}>
+              0.5 = Acrylic/Poor<br />
+              1.0 = Bare 2020<br />
+              4.0 = Bare 4040<br />
+              5.0 = 2020 + 3mm Alu<br />
+              6.5 = 2020 + 5mm Alu<br />
+              7.5 = 4040 + 3mm Alu<br />
+              9.0 = 4040 + 5mm Alu<br />
+              10.0 = CNC Billet/Cast Iron
+            </span>
+          </div>
+          <div style={{ marginTop: '6px', fontSize: '10px', color: 'var(--text-secondary)', lineHeight: '1.2' }}>
+            <em>* Structural panels must be continuously bolted/bonded to extrusions to prevent bowing; flimsy printed clips do not increase stiffness.</em><br />
+            <em style={{ display: 'inline-block', marginTop: '3px' }}>* ACM/PC composite panels provide less than half the shear rigidity of solid aluminum.</em>
+          </div>
         </div>
 
         <details className="sub-category">
@@ -279,7 +330,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <summary>Drive System & Frame</summary>
           <div className="sub-category-content">
             <div className="control-group">
-              <label htmlFor="beltTensionDiff"><span>Belt Tension Delta</span><span className="value-display">{state.beltTensionDiff}%</span></label>
+              <label htmlFor="beltTensionDiff"><span>Unequal Belt Tension (Split Peak)</span><span className="value-display">{state.beltTensionDiff}%</span></label>
               <input type="range" id="beltTensionDiff" min="0" max="50" step="5" value={state.beltTensionDiff} onChange={handleChange} />
             </div>
             <div className="control-group">
