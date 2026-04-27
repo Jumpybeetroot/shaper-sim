@@ -218,22 +218,35 @@ function App() {
         });
       }
 
-      const shaperFunc = SHAPERS[activeShaper];
-      if (shaperFunc) {
+      Object.keys(SHAPERS).forEach(shaperName => {
+        const shaperFunc = SHAPERS[shaperName];
         const shaper = shaperFunc(centerFreq, state.dampingRatio);
         const response = estimate_shaper(shaper, state.dampingRatio, freqs);
         const smoothedPsd = psd.map((val, i) => val * response[i]);
         
-        datasets.push({
-          label: `After shaper (${shaperNames[activeShaper]})`,
-          data: freqs.map((f, i) => ({ x: f, y: smoothedPsd[i] })),
-          borderColor: '#00ffff', // Cyan, just like Klipper's graph
-          borderWidth: 2,
-          borderDash: [5, 5],
-          fill: false,
-          pointRadius: 0,
-        });
-      }
+        if (shaperName === activeShaper) {
+          datasets.push({
+            label: `After shaper (${shaperNames[shaperName]})`,
+            data: freqs.map((f, i) => ({ x: f, y: smoothedPsd[i] })),
+            borderColor: '#00ffff', // Cyan, just like Klipper's graph
+            borderWidth: 2,
+            borderDash: [5, 5],
+            fill: false,
+            pointRadius: 0,
+          });
+        } else {
+          datasets.push({
+            label: shaperNames[shaperName],
+            data: freqs.map((f, i) => ({ x: f, y: smoothedPsd[i] })),
+            borderColor: colors[shaperName],
+            borderWidth: 1.5,
+            borderDash: [3, 3],
+            fill: false,
+            pointRadius: 0,
+            hidden: true, // Hide by default, user can click legend to toggle on
+          });
+        }
+      });
 
       return { labels: [], datasets };
     }
