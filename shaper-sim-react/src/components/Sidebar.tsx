@@ -201,16 +201,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <input type="range" id="twistZ" min="0" max="50" step="1" value={state.twistZ} onChange={handleChange} />
           </div>
           <div className="control-group">
-            <label htmlFor="thStiff"><span>Toolhead Stiffness</span><span className="value-display">{state.thStiff.toFixed(1)}x</span></label>
-            <input type="range" id="thStiff" min="0.2" max="3.0" step="0.1" value={state.thStiff} onChange={handleChange} />
+            <label htmlFor="toolheadStiffness"><span>Toolhead Stiffness</span><span className="value-display">{state.toolheadStiffness.toFixed(1)}x</span></label>
+            <input type="range" id="toolheadStiffness" min="0.2" max="3.0" step="0.1" value={state.toolheadStiffness} onChange={handleChange} />
           </div>
           <div className="control-group">
-            <label htmlFor="beltDiff"><span>Belt Tension Delta</span><span className="value-display">{state.beltDiff}%</span></label>
-            <input type="range" id="beltDiff" min="0" max="50" step="5" value={state.beltDiff} onChange={handleChange} />
+            <label htmlFor="beltTensionDiff"><span>Belt Tension Delta</span><span className="value-display">{state.beltTensionDiff}%</span></label>
+            <input type="range" id="beltTensionDiff" min="0" max="50" step="5" value={state.beltTensionDiff} onChange={handleChange} />
           </div>
           <div className="control-group">
-            <label htmlFor="racking"><span>Gantry Racking (Y only)</span><span className="value-display">{state.racking}%</span></label>
-            <input type="range" id="racking" min="0" max="100" step="5" value={state.racking} onChange={handleChange} />
+            <label htmlFor="gantryRacking"><span>Gantry Racking (Y only)</span><span className="value-display">{state.gantryRacking}%</span></label>
+            <input type="range" id="gantryRacking" min="0" max="100" step="5" value={state.gantryRacking} onChange={handleChange} />
+          </div>
+          <div className="control-group">
+            <label htmlFor="externalSway"><span>External Sway</span><span className="value-display">{state.externalSway}%</span></label>
+            <input type="range" id="externalSway" min="0" max="100" step="5" value={state.externalSway} onChange={handleChange} />
+          </div>
+          <div className="control-group">
+            <label htmlFor="externalSwayFreq"><span>Sway Frequency (Hz)</span><span className="value-display">{state.externalSwayFreq} Hz</span></label>
+            <input type="range" id="externalSwayFreq" min="5" max="35" step="1" value={state.externalSwayFreq} onChange={handleChange} />
+          </div>
+          <div className="control-group">
+            <label htmlFor="squishyFeet"><span>Squishy Materials</span><span className="value-display">{state.squishyFeet}%</span></label>
+            <input type="range" id="squishyFeet" min="0" max="100" step="5" value={state.squishyFeet} onChange={handleChange} />
+          </div>
+          <div className="control-group">
+            <label htmlFor="hoseDrag"><span>Hose Drag Amplitude</span><span className="value-display">{state.hoseDrag}%</span></label>
+            <input type="range" id="hoseDrag" min="0" max="100" step="5" value={state.hoseDrag} onChange={handleChange} />
+          </div>
+          <div className="control-group">
+            <label htmlFor="hoseDragFreq"><span>Hose Drag Freq (Hz)</span><span className="value-display">{state.hoseDragFreq} Hz</span></label>
+            <input type="range" id="hoseDragFreq" min="5" max="35" step="1" value={state.hoseDragFreq} onChange={handleChange} />
+          </div>
+          <div className="control-group">
+            <label htmlFor="hoseSquishy"><span>Hose Damping</span><span className="value-display">{state.hoseSquishy}%</span></label>
+            <input type="range" id="hoseSquishy" min="0" max="100" step="5" value={state.hoseSquishy} onChange={handleChange} />
           </div>
         </div>
       </details>
