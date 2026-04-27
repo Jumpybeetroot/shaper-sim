@@ -454,59 +454,44 @@ export function scoreShapers(axisFreq: number, rawPsd: Float64Array | number[], 
     let results: Record<string, ShaperScore> = {};
 
     for (const s of Object.keys(SHAPERS)) {
-        let best_f = axisFreq;
-        let best_shaper_score = -1;
-        let min_shaper_vib_pct = 1000;
-        let best_shaper_accel = 0;
-
-        const testFreq = (f_test: number) => {
+        let best_res: any = null;
+        const test_results: any[] = [];
+        
+        for (let f_test = 10.0; f_test <= max_hz; f_test += 0.2) {
             const shaper = SHAPERS[s](f_test, DEFAULT_DAMPING_RATIO);
             const { fraction } = estimate_remaining_vibrations(shaper, DEFAULT_DAMPING_RATIO, freqs, rawPsd);
-            const vibrations_pct = fraction * 100.0;
             const max_accel = find_shaper_max_accel(shaper, scv);
-
-            if (vibrations_pct <= 5.0) {
-                if (max_accel > best_shaper_score) {
-                    best_shaper_score = max_accel;
-                    best_f = f_test;
-                    min_shaper_vib_pct = vibrations_pct;
-                    best_shaper_accel = max_accel;
-                }
-            } else if (best_shaper_score === -1 && vibrations_pct < min_shaper_vib_pct) {
-                // Fallback track lowest vibrations if none pass
-                min_shaper_vib_pct = vibrations_pct;
-                best_f = f_test;
-                best_shaper_accel = max_accel;
+            const smoothing = get_shaper_smoothing(shaper, 5000, scv);
+            
+            // Klipper's exact empirical scoring formula
+            const shaper_score = smoothing * (Math.pow(fraction, 1.5) + fraction * 0.2 + 0.01);
+            
+            const res = { freq: f_test, vibrs: fraction, smoothing, score: shaper_score, max_accel };
+            test_results.push(res);
+            
+            if (!best_res || res.vibrs < best_res.vibrs) {
+                best_res = res;
             }
-        };
-
-        // Pass 1: Coarse sweep (3.0 Hz steps)
-        for (let f_test = 10; f_test <= max_hz; f_test += 3.0) {
-            testFreq(f_test);
         }
         
-        // Pass 2: Fine sweep (+/- 3.0 Hz around coarse best, 0.5 Hz steps)
-        const coarse_best = best_f;
-        const fine_min = Math.max(10.0, coarse_best - 3.0);
-        const fine_max = Math.min(max_hz, coarse_best + 3.0);
-        for (let f_test = fine_min; f_test <= fine_max; f_test += 0.5) {
-            testFreq(f_test);
+        let selected = best_res;
+        for (let i = test_results.length - 1; i >= 0; i--) {
+            const res = test_results[i];
+            if (res.vibrs < best_res.vibrs * 1.1 + 0.0005 && res.score < selected.score) {
+                selected = res;
+            }
         }
 
-        // Calculate final smoothing for the best chosen frequency
-        const final_shaper = SHAPERS[s](best_f, DEFAULT_DAMPING_RATIO);
-        const smoothing = get_shaper_smoothing(final_shaper, 5000, scv);
-
         results[s] = {
-            max_accel: best_shaper_accel,
-            vibrations: min_shaper_vib_pct,
-            smoothing: smoothing,
-            freq: best_f
+            max_accel: selected.max_accel,
+            vibrations: selected.vibrs * 100.0,
+            smoothing: selected.smoothing,
+            freq: selected.freq
         };
 
-        if (min_shaper_vib_pct <= 5.0) { // Klipper rejects shapers that leave >5% vibrations
-            if (best_shaper_accel > best_score) {
-                best_score = best_shaper_accel;
+        if (selected.vibrs <= 0.05) { // Klipper rejects shapers that leave >5% vibrations
+            if (selected.max_accel > best_score) {
+                best_score = selected.max_accel;
                 best_shaper = s;
             }
         }
