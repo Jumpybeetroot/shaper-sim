@@ -90,8 +90,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ state, updateState, predX, pre
       <details className="control-section" open>
         <summary><h3>Graph Settings<CaretDown size={16} className="ml-auto ph-caret-down" /></h3></summary>
         <div className="control-group">
-          <label htmlFor="maxX">Max Frequency (Hz)</label>
-          <input type="number" id="maxX" value={state.maxX} step="10" min="50" max="400" onChange={handleChange} />
+          <label htmlFor="maxX">
+            <span>Max Frequency (Hz)</span>
+            <span className="value-display">{state.maxX} Hz</span>
+          </label>
+          <input type="range" id="maxX" value={state.maxX || 400} step="10" min="50" max="1000" onChange={handleChange} />
         </div>
       </details>
 
