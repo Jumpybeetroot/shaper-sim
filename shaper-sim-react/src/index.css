@@ -668,22 +668,24 @@ input[type="number"]:focus, select:focus {
     text-align: center;
 }
 
-.prediction-overlay {
-    position: absolute;
-    top: 24px;
-    right: 24px;
-    z-index: 10;
-    pointer-events: none;
+.draggable-overlay {
+    user-select: none; /* Prevent text selection while dragging */
 }
 
-.prediction-overlay .prediction-box {
-    pointer-events: auto;
+.draggable-overlay.dragging .prediction-box {
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.6);
+    border-color: rgba(0, 240, 255, 0.6);
+    transform: scale(1.02);
+}
+
+.draggable-overlay .prediction-box {
     margin-top: 0;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     background: rgba(15, 17, 26, 0.85);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     border-color: rgba(112, 0, 255, 0.5);
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
 }
 
 .prediction-box h4 {

@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChartDisplay } from './components/ChartDisplay';
+import { DraggableOverlay } from './components/DraggableOverlay';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { defaultState } from './types';
 import type { AppState } from './types';
@@ -654,7 +655,7 @@ function App() {
         </header>
         
         <ChartDisplay data={chartData} options={chartOptions} plugins={plugins}>
-          <div className="prediction-overlay">
+          <DraggableOverlay defaultPosition={{ top: 24, right: 24 }}>
             <div className="prediction-box mt-0">
               <h4>Predicted Resonance</h4>
               <div className="prediction-freq-list">
@@ -706,7 +707,7 @@ function App() {
                 </div>
               </div>
             </div>
-          </div>
+          </DraggableOverlay>
         </ChartDisplay>
 
         <div className="bottom-panels">
