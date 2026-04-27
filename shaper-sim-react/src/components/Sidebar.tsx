@@ -215,21 +215,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="value-display">{state.frameStiffness.toFixed(1)}</span>
           </label>
           <input type="range" id="frameStiffness" min="0.5" max="10.0" step="0.1" value={state.frameStiffness} onChange={handleChange} />
-          <div className="tension-display" style={{ marginTop: '4px' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'left', lineHeight: '1.3' }}>
-              0.5 = Acrylic/Poor<br />
-              1.0 = Bare 2020<br />
-              4.0 = Bare 4040<br />
-              5.0 = 2020 + 3mm Alu<br />
-              6.5 = 2020 + 5mm Alu<br />
-              7.5 = 4040 + 3mm Alu<br />
-              9.0 = 4040 + 5mm Alu<br />
-              10.0 = CNC Billet/Cast Iron
-            </span>
+          <div style={{ marginTop: '6px', display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: '10px', rowGap: '1px', fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+            <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>0.5</span>  <span>Acrylic / Poor</span>
+            <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>1.0</span>  <span>Bare 2020</span>
+            <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>4.0</span>  <span>Bare 4040</span>
+            <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>5.0</span>  <span>2020 + 3mm Alu panel</span>
+            <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>6.5</span>  <span>2020 + 5mm Alu panel</span>
+            <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>7.5</span>  <span>4040 + 3mm Alu panel</span>
+            <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>9.0</span>  <span>4040 + 5mm Alu panel</span>
+            <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>10.0</span> <span>CNC Billet / Cast Iron</span>
           </div>
-          <div style={{ marginTop: '6px', fontSize: '10px', color: 'var(--text-secondary)', lineHeight: '1.2' }}>
-            <em>* Structural panels must be continuously bolted/bonded to extrusions to prevent bowing; flimsy printed clips do not increase stiffness.</em><br />
-            <em style={{ display: 'inline-block', marginTop: '3px' }}>* ACM/PC composite panels provide less than half the shear rigidity of solid aluminum.</em>
+          <div style={{ marginTop: '6px', fontSize: '10px', color: 'var(--text-secondary)', lineHeight: '1.3', opacity: 0.8 }}>
+            <em>* Panels must be continuously bolted/bonded to extrusions — flimsy printed clips don't add stiffness.</em><br />
+            <em style={{ display: 'inline-block', marginTop: '3px' }}>* ACM/PC composite panels have less than half the shear rigidity of solid aluminum.</em>
           </div>
         </div>
 
