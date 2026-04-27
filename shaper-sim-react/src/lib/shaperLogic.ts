@@ -164,7 +164,7 @@ export function get_shaper_smoothing(shaper: Shaper, accel: number = 5000, scv: 
 function _bisect(func: (val: number) => boolean): number {
     let left = 1.0;
     let right = 1.0;
-    if (!func(1e-9)) return 0.0;
+    if (!func(1e-9) || isNaN(left)) return 0.0;
 
     while (!func(left)) {
         right = left;
