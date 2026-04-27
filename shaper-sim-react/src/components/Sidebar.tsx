@@ -33,7 +33,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ state, updateState, predX, pre
       </div>
 
       <details className="control-section highlighted-section" open>
-        <summary><h3 className="highlighted-title"><FloppyDisk /> Tuning Profiles<CaretDown className="ml-auto" /></h3></summary>
+        <summary><h3 className="highlighted-title"><FloppyDisk size={18} /> Tuning Profiles<CaretDown size={18} className="ml-auto" /></h3></summary>
         <div className="control-group">
           <select className="profile-select" value={selectedProfile} onChange={e => {
               setSelectedProfile(e.target.value);
@@ -42,29 +42,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ state, updateState, predX, pre
             <option value="">-- Select Profile --</option>
             {profiles.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
-        </div>
-        <div className="profile-actions mt-2">
-            <input type="text" id="newProfileName" className="profile-input" placeholder="New Profile Name..." />
-            <button className="btn-icon btn-save" title="Save Profile" onClick={() => {
-                const input = document.getElementById('newProfileName') as HTMLInputElement;
-                const name = input?.value;
-                if (name) {
-                    saveProfile(name);
-                    setSelectedProfile(name);
-                    input.value = '';
-                }
-            }}><FloppyDisk size={18} /></button>
-            <button className="btn-icon btn-delete" title="Delete Selected" onClick={() => {
-                if (selectedProfile && window.confirm(`Delete profile '${selectedProfile}'?`)) {
-                    deleteProfile(selectedProfile);
-                    setSelectedProfile('');
-                }
-            }} disabled={!selectedProfile}><Trash size={18} /></button>
+          <div className="profile-actions">
+              <input type="text" id="newProfileName" className="profile-input" placeholder="New Profile Name..." />
+              <button className="btn-icon btn-save" title="Save Profile" onClick={() => {
+                  const input = document.getElementById('newProfileName') as HTMLInputElement;
+                  const name = input?.value;
+                  if (name) {
+                      saveProfile(name);
+                      setSelectedProfile(name);
+                      input.value = '';
+                  }
+              }}><FloppyDisk size={18} /></button>
+              <button className="btn-icon btn-delete" title="Delete Selected" onClick={() => {
+                  if (selectedProfile && window.confirm(`Delete profile '${selectedProfile}'?`)) {
+                      deleteProfile(selectedProfile);
+                      setSelectedProfile('');
+                  }
+              }} disabled={!selectedProfile}><Trash size={18} /></button>
+          </div>
         </div>
       </details>
 
       <details className="control-section" open>
-        <summary><h3><Sliders /> Simulation Settings<CaretDown className="ml-auto" /></h3></summary>
+        <summary><h3><Sliders size={16} /> Simulation Settings<CaretDown size={16} className="ml-auto" /></h3></summary>
         <div className="control-group">
           <label htmlFor="dampingRatio">
             <span>Damping Ratio</span>
@@ -87,7 +87,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ state, updateState, predX, pre
       </details>
 
       <details className="control-section" open>
-        <summary><h3>Graph Settings<CaretDown className="ml-auto" /></h3></summary>
+        <summary><h3>Graph Settings<CaretDown size={16} className="ml-auto" /></h3></summary>
         <div className="control-group">
           <label htmlFor="maxX">Max Frequency (Hz)</label>
           <input type="number" id="maxX" value={state.maxX} step="10" min="50" max="400" onChange={handleChange} />
@@ -95,7 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ state, updateState, predX, pre
       </details>
 
       <details className="control-section" open>
-        <summary><h3><Cube /> CoreXY Mechanicals<CaretDown className="ml-auto" /></h3></summary>
+        <summary><h3><Cube size={16} /> CoreXY Mechanicals<CaretDown size={16} className="ml-auto" /></h3></summary>
         <div className="control-group">
           <label htmlFor="driveType">Drive Configuration</label>
           <select id="driveType" value={state.driveType} onChange={handleChange}>
@@ -258,7 +258,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ state, updateState, predX, pre
       </details>
 
       <details className="control-section">
-        <summary><h3>Mechanical Imperfections<CaretDown className="ml-auto" /></h3></summary>
+        <summary><h3>Mechanical Imperfections<CaretDown size={16} className="ml-auto" /></h3></summary>
         <details className="sub-category">
           <summary>Drive System & Frame</summary>
           <div className="sub-category-content">

@@ -100,7 +100,7 @@ details.control-section summary::-webkit-details-marker {
     margin-bottom: 20px;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
     transition: color 0.2s;
 }
 
