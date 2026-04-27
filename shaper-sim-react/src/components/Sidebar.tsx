@@ -39,10 +39,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="logo-section" style={{ 
           display: 'flex', 
           alignItems: 'center', 
-          justifyContent: 'center',
-          gap: '10px',
+          justifyContent: 'flex-start',
+          gap: '12px',
           width: '100%', 
-          padding: '10px 0', 
+          padding: '10px 8px', 
           marginBottom: '10px' 
         }}>
           <Waveform size={36} weight="duotone" color="#00ffff" style={{ filter: 'drop-shadow(0 0 8px rgba(0, 255, 255, 0.6))' }} />
@@ -298,6 +298,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className="value-display">{state.printSpeed} mm/s</span>
               </label>
               <input type="range" id="printSpeed" min="0" max="1000" step="10" value={state.printSpeed} onChange={handleChange} disabled={!state.enableDynamicSpeed} />
+              <div className="tension-display" style={{ textAlign: 'left', marginTop: '6px' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.3' }}>
+                  <b>Tip:</b> Simulates torque drop-off (shifts resonance peaks lower) and GT2 belt tooth meshing at <b>{(state.printSpeed / 2).toFixed(0)} Hz</b>.
+                </span>
+              </div>
             </div>
             <div className="control-group">
               <label htmlFor="twistX"><span>X COM Offset (mm)</span><span className="value-display">{state.twistX} mm</span></label>

@@ -81,18 +81,20 @@ The stepper motor rotor is held by a magnetic field that acts as a torsional spr
 
 $$K_{magnetic} \approx \frac{\text{Holding Torque} \times \text{Current\%}}{\text{Step Angle}}$$
 
-### Acceleration Smear
+### Speed Simulation & Belt Meshing
 
 Klipper's `TEST_RESONANCES` measures at standstill — maximum torque, stiff magnetic spring, high resonance frequency.
 
-During a real print at high speed, back-EMF fights the stepper driver:
-1. Speed increases → torque drops
-2. Torque drops → magnetic spring softens
-3. Spring softens → **resonance frequency drops**
+During a real print at high speed, two dynamic effects occur:
 
-The static input shaper (tuned at standstill) becomes desynchronized from the dynamically shifting frequency during acceleration.
+1. **Back-EMF Torque Drop-off**: Speed fights the stepper driver. As speed increases, holding torque drops, softening the magnetic spring, which in turn **drops the resonance frequency**. 
+   The simulator models this using a hyperbolic curve:
+   $$TorqueFactor = \frac{1}{1 + (v / 600)^{1.5}}$$
+   This visualizes why static input shapers (tuned at standstill) become desynchronized and struggle at high speeds (e.g., 500+ mm/s).
 
-When **Speed Simulation** is enabled, the simulator integrates 15 distinct resonance curves across the acceleration profile (from SCV up to target print speed). The result is a mathematically accurate **acceleration smear** — the primary peak widens and shifts toward lower frequencies, visualizing why static shapers struggle at 500+ mm/s.
+2. **Belt Tooth Meshing Vibration**: A standard GT2 belt has a 2mm pitch. As it runs over the pulley, the teeth meshing action injects a continuous excitation frequency at:
+   $$f_{mesh} = \frac{v}{2} \text{ Hz}$$
+   When **Speed Simulation** is enabled, the simulator injects a specific Lorentzian peak into the PSD curve at this frequency. The amplitude scales with the speed, producing a distinct, tracking peak that can interact with the primary resonance if their frequencies align.
 
 ---
 

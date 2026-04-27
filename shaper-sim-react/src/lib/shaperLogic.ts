@@ -37,6 +37,10 @@ export interface Imperfections {
     cross_twist?: number;
 }
 
+export interface SpeedParams {
+    print_speed: number;
+}
+
 // --- Shaper Generators --- //
 
 export function get_zv_shaper(shaper_freq: number, damping_ratio: number): Shaper {
@@ -200,7 +204,7 @@ export function find_shaper_max_accel(shaper: Shaper, scv: number): number {
 
 // --- Predictive Mechanical Model --- //
 
-export function predict_resonance(mass_g: number, belt_EA: number, tension_N: number, frame_multiplier: number, belt_length_mm: number, drive_type: number = 2, motor_torque_mNm: number = 550, motor_current_pct: number = 70, motor_rotor_teeth: number = 50, pulley_teeth: number = 20, motor_inertia_g_cm2: number = 84.5, belt_density_kg_m: number = 0.0012): number {
+export function predict_resonance(mass_g: number, belt_EA: number, tension_N: number, frame_multiplier: number, belt_length_mm: number, drive_type: number = 2, motor_torque_mNm: number = 550, motor_current_pct: number = 70, motor_rotor_teeth: number = 50, pulley_teeth: number = 20, motor_inertia_g_cm2: number = 84.5, belt_density_kg_m: number = 0.0012, print_speed: number = 0): number {
     let M = mass_g / 1000.0;
     const L = belt_length_mm / 1000.0;
     
@@ -228,7 +232,10 @@ export function predict_resonance(mass_g: number, belt_EA: number, tension_N: nu
     const pulley_radius_m = (pulley_teeth * 2.0) / (2.0 * Math.PI) / 1000.0;
     const Kmotor_single = K_theta / Math.pow(pulley_radius_m, 2);
     
-    const Kmotor_total = Kmotor_single * drive_type;
+    const torque_factor = print_speed > 0
+        ? 1.0 / (1.0 + Math.pow(print_speed / 600.0, 1.5))
+        : 1.0;
+    const Kmotor_total = Kmotor_single * drive_type * torque_factor;
     
     const Keff = 1.0 / (1.0 / Kbelt + 1.0 / Kframe + 1.0 / Kmotor_total);
     
@@ -255,7 +262,7 @@ export const SHAPERS: Record<string, (f: number, d: number) => Shaper> = {
 
 // --- PSD Simulation --- //
 
-export function generate_psd_curve(center_freq: number, freqs: Float64Array | number[], imperfections: Imperfections = {}, out_psd?: Float64Array): Float64Array {
+export function generate_psd_curve(center_freq: number, freqs: Float64Array | number[], imperfections: Imperfections = {}, out_psd?: Float64Array, speed?: SpeedParams): Float64Array {
     const {
         axis = 'x',
         toolhead_twist = 0,
@@ -343,6 +350,14 @@ export function generate_psd_curve(center_freq: number, freqs: Float64Array | nu
             const racking_amp = base_amplitude * (gantry_racking / 100.0) * 0.9;
             const racking_w = racking_freq * damping_ratio * 2.0;
             val += racking_amp / (1.0 + Math.pow((f - racking_freq) / racking_w, 2.0));
+        }
+
+        if (speed && speed.print_speed > 0) {
+            const v = speed.print_speed;
+            const mesh_freq = v / 2.0;
+            const mesh_amp = base_amplitude * (v / 2000.0) * 0.5;
+            const mesh_w = mesh_freq * damping_ratio * 3.0;
+            val += mesh_amp / (1.0 + Math.pow((f - mesh_freq) / mesh_w, 2.0));
         }
         
         out_psd[i] = val;

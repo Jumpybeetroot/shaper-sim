@@ -362,7 +362,7 @@ input[type="number"]:focus, select:focus {
     flex: 1;
     display: flex;
     flex-direction: column;
-    padding: 32px;
+    padding: 12px;
     overflow-y: auto;
 }
 
@@ -371,7 +371,7 @@ input[type="number"]:focus, select:focus {
     justify-content: space-between;
     align-items: center;
     background: var(--bg-panel);
-    padding: 12px 20px;
+    padding: 12px 8px;
     border-radius: 8px;
     margin-bottom: 15px;
 }

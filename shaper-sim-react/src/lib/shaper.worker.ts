@@ -22,7 +22,9 @@ self.onmessage = (e: MessageEvent<{type: string, state: AppState}>) => {
       state.motorCurrent,
       50,
       20,
-      state.motorInertia
+      state.motorInertia,
+      beltDensity,
+      state.enableDynamicSpeed ? state.printSpeed : 0
     );
 
     const predY = predict_resonance(
@@ -36,7 +38,9 @@ self.onmessage = (e: MessageEvent<{type: string, state: AppState}>) => {
       state.motorCurrent,
       50,
       20,
-      state.motorInertia
+      state.motorInertia,
+      beltDensity,
+      state.enableDynamicSpeed ? state.printSpeed : 0
     );
 
     const safeMaxX = Math.min(1000, Math.max(10, state.maxX || 0));
@@ -69,8 +73,9 @@ self.onmessage = (e: MessageEvent<{type: string, state: AppState}>) => {
         gantry_racking: state.gantryRacking
     };
 
-    const psdX = generate_psd_curve(predX, freqs, imperfectionsX);
-    const psdY = generate_psd_curve(predY, freqs, imperfectionsY);
+    const speedParams = state.enableDynamicSpeed ? { print_speed: state.printSpeed } : undefined;
+    const psdX = generate_psd_curve(predX, freqs, imperfectionsX, undefined, speedParams);
+    const psdY = generate_psd_curve(predY, freqs, imperfectionsY, undefined, speedParams);
 
     if (type === 'PSD') {
         self.postMessage({

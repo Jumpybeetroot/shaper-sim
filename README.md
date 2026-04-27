@@ -20,7 +20,7 @@ Unlike calculators that use simple empirical ratios, this simulator mathematical
 - **Step response mode** — 2nd-order underdamped time-domain view showing how the selected shaper flatlines ringing
 - **Snapshot (ghost graphs)** — lock a baseline curve, then watch the live curve shift as you change parameters
 - **CSV import** — load Klipper-generated `calibration_data_*.csv` files and overlay the real ADXL data on the simulated PSD (normalized to the simulated peak for shape comparison)
-- **Acceleration smear** — integrates 15 resonance curves across the acceleration profile from SCV to print speed, visualizing how static input shapers desynchronize at high speeds due to back-EMF torque loss
+- **Speed simulation** — models the dynamic effects of print speed on resonance, including stepper back-EMF torque drop-off (which shifts resonance frequencies lower) and GT2 belt tooth meshing vibrations at `f = v / 2` Hz.
 
 ## Running locally
 
