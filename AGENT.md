@@ -28,9 +28,9 @@ too.
 Hello, fellow AI coding assistant! If you are reading this, you are working on the **Kalico Input Shaper Simulator**. This file contains critical architectural rules and context to prevent regressions in this codebase. Read this carefully before modifying any code.
 
 ## 1. Tech Stack & Philosophy
-* **Pure Vanilla:** This project uses vanilla HTML, CSS, and JavaScript. 
-* **No Frameworks:** DO NOT introduce React, Vue, Svelte, TailwindCSS, or any build tools (Webpack/Vite). The app must be able to run by simply opening `index.html` in a browser.
-* **Chart.js Rendering:** The graphs (PSD curves, Step Responses) are drawn using the `Chart.js` library in `app.js`, wrapped dynamically around an HTML5 canvas.
+* **React + Vite:** This project uses a modern frontend stack built with React, Vite, and TypeScript.
+* **Styling:** Vanilla CSS with CSS Modules. Do not introduce TailwindCSS unless requested.
+* **Chart.js Rendering:** The graphs (PSD curves, Step Responses) are drawn using the `Chart.js` library wrapped in `react-chartjs-2`.
 
 ## 2. Architecture
 The project logic is split between two core files:
@@ -73,7 +73,7 @@ When adding new sliders to `index.html`:
 4. Ensure `handleInputEvents()` updates the display span and triggers `generateChartData()` to update the graphs.
 
 ## 5. Save Protocol (Auto-commit & Push)
-After every change (creating, modifying, or deleting any file), the agent MUST immediately commit and push to the WIP GitHub branch (`wip-local-testing`).
+After every change (creating, modifying, or deleting any file, excluding journal files), the agent MUST immediately commit and push to the WIP GitHub branch (`wip-local-testing`).
 
 Execute these commands without waiting for user confirmation:
 ```bash
