@@ -159,6 +159,7 @@ function App() {
   const chartData = useMemo(() => {
     const psd = viewAxis === 'x' ? psdX : psdY;
     const recommendedShaper = viewAxis === 'x' ? scoreX.best_shaper : scoreY.best_shaper;
+    const activeShaper = selectedShaper === 'recommended' ? recommendedShaper : selectedShaper;
 
     if (graphMode === 'step') {
       const { times, unshaped, shaped } = generate_step_responses(centerFreq, state.dampingRatio, null, 0.250, 0.0005);
@@ -176,7 +177,6 @@ function App() {
         }
       ];
 
-      const activeShaper = selectedShaper === 'recommended' ? recommendedShaper : selectedShaper;
       const shaperFunc = SHAPERS[activeShaper];
       const shaper = shaperFunc ? shaperFunc(centerFreq, state.dampingRatio) : null;
       const { shaped: shapedResponse } = generate_step_responses(centerFreq, state.dampingRatio, shaper, 0.250, 0.0005);
@@ -218,22 +218,22 @@ function App() {
         });
       }
 
-      Object.keys(SHAPERS).forEach(shaperName => {
-        const shaperFunc = SHAPERS[shaperName];
+      const shaperFunc = SHAPERS[activeShaper];
+      if (shaperFunc) {
         const shaper = shaperFunc(centerFreq, state.dampingRatio);
         const response = estimate_shaper(shaper, state.dampingRatio, freqs);
         const smoothedPsd = psd.map((val, i) => val * response[i]);
         
         datasets.push({
-          label: shaperNames[shaperName],
+          label: `After shaper (${shaperNames[activeShaper]})`,
           data: freqs.map((f, i) => ({ x: f, y: smoothedPsd[i] })),
-          borderColor: colors[shaperName],
-          borderWidth: 1.5,
-          borderDash: [3, 3],
+          borderColor: '#00ffff', // Cyan, just like Klipper's graph
+          borderWidth: 2,
+          borderDash: [5, 5],
           fill: false,
           pointRadius: 0,
         });
-      });
+      }
 
       return { labels: [], datasets };
     }
