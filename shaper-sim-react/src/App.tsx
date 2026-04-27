@@ -5,7 +5,7 @@ import { defaultState } from './types';
 import type { AppState } from './types';
 import { SHAPERS, DEFAULT_DAMPING_RATIO, estimate_shaper, generate_step_responses } from './lib/shaperLogic';
 import type { ShaperScore } from './lib/shaperLogic';
-import { Info, WarningCircle, Camera, XCircle } from '@phosphor-icons/react';
+import { Info, WarningCircle, Camera, XCircle, XCircleIcon, FileArrowUpIcon } from '@phosphor-icons/react';
 
 const colors: Record<string, string> = {
   zv: '#ff3366',
@@ -23,6 +23,61 @@ const shaperNames: Record<string, string> = {
   '3hump_ei': '3HUMP_EI'
 };
 
+// --- CSV overlay support ---
+
+interface CsvOverlay {
+  id: string;
+  label: string;
+  // auto-detected from filename: _x_ → x axis only, _y_ → y axis only
+  axis: 'x' | 'y' | 'both';
+  freqs: Float64Array;
+  psd: Float64Array;
+}
+
+const CSV_COLORS = ['#ff9900', '#ff44aa', '#44ffcc', '#bb44ff', '#ffff44', '#44aaff'];
+
+function parseKlipperCsv(text: string, filename: string): CsvOverlay | null {
+  // Strip comment lines (Klipper raw resonance files start lines with #)
+  const lines = text.trim().split(/\r?\n/).filter(l => l && !l.startsWith('#'));
+  if (lines.length < 2) return null;
+
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+  const freqIdx = headers.indexOf('freq');
+  if (freqIdx === -1) return null;
+
+  // Prefer psd_xyz (combined), then psd_x, then any psd_ column
+  let psdIdx = headers.indexOf('psd_xyz');
+  if (psdIdx === -1) psdIdx = headers.indexOf('psd_x');
+  if (psdIdx === -1) psdIdx = headers.findIndex(h => h.startsWith('psd'));
+  if (psdIdx === -1) return null;
+
+  const freqs: number[] = [];
+  const psd: number[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const parts = lines[i].split(',');
+    const f = parseFloat(parts[freqIdx]);
+    const p = parseFloat(parts[psdIdx]);
+    if (isFinite(f) && isFinite(p) && f > 0) {
+      freqs.push(f);
+      psd.push(p);
+    }
+  }
+  if (freqs.length === 0) return null;
+
+  const lower = filename.toLowerCase();
+  const axis: 'x' | 'y' | 'both' =
+    /_x[_.]/.test(lower) ? 'x' :
+    /_y[_.]/.test(lower) ? 'y' : 'both';
+
+  return {
+    id: `${filename}_${Date.now()}`,
+    label: filename.replace(/\.csv$/i, ''),
+    axis,
+    freqs: new Float64Array(freqs),
+    psd: new Float64Array(psd),
+  };
+}
+
 function App() {
   const [state, setState] = useState<AppState>(defaultState);
   const [graphMode, setGraphMode] = useState<'psd' | 'step'>('psd');
@@ -30,6 +85,29 @@ function App() {
   const [selectedShaper, setSelectedShaper] = useState<string>('recommended');
   
   const [snapshotData, setSnapshotData] = useState<{psdX: Float64Array, psdY: Float64Array, freqs: Float64Array} | null>(null);
+  const [csvOverlays, setCsvOverlays] = useState<CsvOverlay[]>([]);
+  const csvInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCsvImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    const promises = Array.from(files).map(
+      file => new Promise<CsvOverlay | null>(resolve => {
+        const reader = new FileReader();
+        reader.onload = ev => resolve(parseKlipperCsv(ev.target?.result as string, file.name));
+        reader.readAsText(file);
+      })
+    );
+    Promise.all(promises).then(results => {
+      const valid = results.filter((o): o is CsvOverlay => o !== null);
+      if (valid.length > 0) setCsvOverlays(prev => [...prev, ...valid]);
+    });
+    e.target.value = '';
+  }, []);
+
+  const removeCsvOverlay = useCallback((id: string) => {
+    setCsvOverlays(prev => prev.filter(o => o.id !== id));
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem('shaperSim_state');
@@ -230,6 +308,28 @@ function App() {
         });
       }
 
+      // CSV overlays — normalize each to the simulated PSD peak so frequency
+      // shapes compare directly regardless of unit differences.
+      let simMax = 0;
+      for (let i = 0; i < psd.length; i++) if (psd[i] > simMax) simMax = psd[i];
+
+      csvOverlays
+        .filter(o => o.axis === 'both' || o.axis === viewAxis)
+        .forEach((overlay, idx) => {
+          let csvMax = 0;
+          for (let i = 0; i < overlay.psd.length; i++) if (overlay.psd[i] > csvMax) csvMax = overlay.psd[i];
+          const scale = simMax > 0 && csvMax > 0 ? simMax / csvMax : 1;
+          datasets.push({
+            label: overlay.label,
+            data: Array.from(overlay.freqs, (f, i) => ({ x: f, y: overlay.psd[i] * scale })),
+            borderColor: CSV_COLORS[idx % CSV_COLORS.length],
+            borderWidth: 2,
+            borderDash: [],
+            fill: false,
+            pointRadius: 0,
+          });
+        });
+
       const score = viewAxis === 'x' ? scoreX : scoreY;
       Object.keys(SHAPERS).forEach(shaperName => {
         const shaperFunc = SHAPERS[shaperName];
@@ -265,7 +365,7 @@ function App() {
 
       return { labels: [], datasets };
     }
-  }, [state.dampingRatio, workerResult, graphMode, selectedShaper, viewAxis, snapshotData]);
+  }, [state.dampingRatio, workerResult, graphMode, selectedShaper, viewAxis, snapshotData, csvOverlays]);
 
   const chartOptions = useMemo(() => {
     const isStep = graphMode === 'step';
@@ -469,16 +569,41 @@ function App() {
               ) : (
                 <button className="nav-btn nav-btn-snapshot" onClick={() => {
                   if (workerResult) {
-                    setSnapshotData({ 
-                      psdX: new Float64Array(workerResult.psdX), 
-                      psdY: new Float64Array(workerResult.psdY), 
-                      freqs: new Float64Array(workerResult.freqs) 
+                    setSnapshotData({
+                      psdX: new Float64Array(workerResult.psdX),
+                      psdY: new Float64Array(workerResult.psdY),
+                      freqs: new Float64Array(workerResult.freqs)
                     });
                   }
                 }}>
                   <Camera weight="bold" /> Snapshot
                 </button>
               )}
+            </div>
+
+            <div className="toggle-group small-padding">
+              <input
+                ref={csvInputRef}
+                type="file"
+                accept=".csv"
+                multiple
+                style={{ display: 'none' }}
+                onChange={handleCsvImport}
+              />
+              <button className="nav-btn nav-btn-snapshot" onClick={() => csvInputRef.current?.click()}>
+                <FileArrowUpIcon weight="bold" /> Import CSV
+              </button>
+              {csvOverlays.map((o, idx) => (
+                <button
+                  key={o.id}
+                  className="nav-btn nav-btn-clear"
+                  style={{ borderColor: CSV_COLORS[idx % CSV_COLORS.length], color: CSV_COLORS[idx % CSV_COLORS.length] }}
+                  onClick={() => removeCsvOverlay(o.id)}
+                  title={`Remove ${o.label}`}
+                >
+                  <XCircleIcon weight="bold" /> {o.label}
+                </button>
+              ))}
             </div>
 
             <div className="toggle-group">
