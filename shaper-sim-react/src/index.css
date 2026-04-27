@@ -664,7 +664,7 @@ input[type="number"]:focus, select:focus {
     background: rgba(112, 0, 255, 0.1);
     border: 1px solid rgba(112, 0, 255, 0.3);
     border-radius: 8px;
-    padding: 16px;
+    padding: 18px;
     text-align: center;
 }
 
@@ -689,17 +689,17 @@ input[type="number"]:focus, select:focus {
 }
 
 .prediction-box h4 {
-    font-size: 11px;
+    font-size: 13px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-secondary);
-    margin-bottom: 12px;
+    margin-bottom: 14px;
 }
 
 .prediction-freq-list {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
 }
 
 .prediction-item {
@@ -710,39 +710,39 @@ input[type="number"]:focus, select:focus {
 }
 
 .axis-label {
-    font-size: 11px;
+    font-size: 13px;
     color: var(--text-secondary);
     font-weight: 600;
 }
 
 .freq-val {
-    font-size: 20px;
+    font-size: 23px;
     font-weight: 800;
     color: var(--accent-secondary);
     line-height: 1;
 }
 
 .shaper-detail {
-    font-size: 11px;
+    font-size: 13px;
     color: var(--accent-primary);
     font-family: 'Fira Code', monospace;
     background: rgba(0, 240, 255, 0.05);
-    padding: 2px 6px;
+    padding: 3px 7px;
     border-radius: 4px;
-    margin-top: 4px;
+    margin-top: 5px;
 }
 
 .compliance-bar-container {
-    width: 80%;
-    margin-top: 8px;
+    width: 85%;
+    margin-top: 9px;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 5px;
 }
 
 .compliance-bar {
     display: flex;
-    height: 6px;
+    height: 7px;
     width: 100%;
     border-radius: 3px;
     overflow: hidden;
@@ -770,11 +770,11 @@ input[type="number"]:focus, select:focus {
 .compliance-labels {
     display: flex;
     justify-content: space-between;
-    font-size: 9px;
+    font-size: 10px;
     text-transform: uppercase;
     font-weight: 700;
     letter-spacing: 0.05em;
-    padding: 0 2px;
+    padding: 0 3px;
 }
 
 .label-belt { color: #00f0ff; }
