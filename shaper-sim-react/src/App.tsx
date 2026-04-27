@@ -283,8 +283,15 @@ function App() {
           ticks: {
             callback: function(value: any) {
               if (isStep) return value.toFixed(2);
-              if (value === 0) return 0;
-              return value.toExponential(1);
+              if (value === 0) return '0';
+              
+              // Format to Klipper's cleaner scientific notation (e.g. 1.5e6 or 2e6 instead of 2.0e+6)
+              let str = value.toExponential(1);
+              str = str.replace('+0', '').replace('+', ''); // remove +0 or + signs
+              if (str.includes('.0e')) {
+                  str = str.replace('.0e', 'e');
+              }
+              return str;
             }
           }
         }
