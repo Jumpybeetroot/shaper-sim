@@ -21,8 +21,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ state, updateState, predX, pre
     if (type === 'checkbox') {
       updateState(id as keyof AppState, (e.target as HTMLInputElement).checked);
     } else {
-      let val = parseFloat(value);
-      if (isNaN(val)) return; // Don't update if input is invalid/empty
+      const val = value === '' ? NaN : parseFloat(value);
       updateState(id as keyof AppState, val);
     }
   };
