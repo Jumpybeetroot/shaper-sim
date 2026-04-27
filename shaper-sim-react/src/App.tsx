@@ -376,6 +376,18 @@ function App() {
             <p>Power Spectral Density Simulation</p>
           </div>
           <div className="top-nav-controls">
+            <div className="toggle-group small-padding">
+              {snapshotData ? (
+                <button className="nav-btn nav-btn-clear" onClick={() => setSnapshotData(null)}>
+                  <XCircle weight="bold" /> Clear
+                </button>
+              ) : (
+                <button className="nav-btn nav-btn-snapshot" onClick={() => setSnapshotData({ psdX: [...psdX], psdY: [...psdY], freqs: [...freqs] })}>
+                  <Camera weight="bold" /> Snapshot
+                </button>
+              )}
+            </div>
+
             <div className="toggle-group">
               <span className="toggle-label">Graph Mode:</span>
               <select className="toggle-select" value={graphMode} onChange={e => setGraphMode(e.target.value as any)}>
@@ -383,6 +395,7 @@ function App() {
                 <option value="step">Time (Step Response)</option>
               </select>
             </div>
+
             {graphMode === 'step' && (
               <div className="toggle-group">
                 <span className="toggle-label">Shaper:</span>
@@ -396,19 +409,14 @@ function App() {
                 </select>
               </div>
             )}
-            <div className="header-controls">
-            {snapshotData ? (
-              <button className="btn btn-secondary" onClick={() => setSnapshotData(null)}>Clear Snapshot</button>
-            ) : (
-              <button className="btn btn-primary" onClick={() => setSnapshotData({ psdX: [...psdX], psdY: [...psdY], freqs: [...freqs] })}>Take Snapshot</button>
-            )}
-            <div className="control-group inline">
-              <select value={viewAxis} onChange={e => setViewAxis(e.target.value as 'x'|'y')}>
+
+            <div className="toggle-group">
+              <span className="toggle-label">View Axis:</span>
+              <select className="toggle-select" value={viewAxis} onChange={e => setViewAxis(e.target.value as 'x'|'y')}>
                 <option value="x">X Axis</option>
                 <option value="y">Y Axis</option>
               </select>
             </div>
-          </div>
           </div>
         </header>
         
