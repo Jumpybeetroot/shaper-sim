@@ -394,7 +394,7 @@ export function generate_step_responses(center_freq: number, damping_ratio: numb
     return { times, unshaped, shaped };
 }
 
-export function estimate_shaper(shaper: Shaper, test_damping_ratio: number, freqs: Float64Array | number[], memo: any = null): Float64Array {
+export function estimate_shaper(shaper: Shaper, test_damping_ratio: number, freqs: Float64Array | number[], memo: any = null, outBuffer: Float64Array | null = null): Float64Array {
     const { A, T } = shaper;
     const n = A.length;
     let sum_A = 0.0;
@@ -405,7 +405,7 @@ export function estimate_shaper(shaper: Shaper, test_damping_ratio: number, freq
     const useMemo = memo && memo.length === freqs.length;
     const df = Math.sqrt(1.0 - test_damping_ratio * test_damping_ratio);
 
-    const out = new Float64Array(freqs.length);
+    const out = outBuffer || new Float64Array(freqs.length);
     for (let k = 0; k < freqs.length; k++) {
         const omega = useMemo ? memo.omega[k] : 2.0 * Math.PI * freqs[k];
         const damping = useMemo ? memo.damping[k] : test_damping_ratio * omega;
@@ -423,8 +423,8 @@ export function estimate_shaper(shaper: Shaper, test_damping_ratio: number, freq
     return out;
 }
 
-export function estimate_remaining_vibrations(shaper: Shaper, test_damping_ratio: number, freqs: Float64Array | number[], psd: Float64Array | number[], memo: any = null): { fraction: number, vals: Float64Array } {
-    const vals = estimate_shaper(shaper, test_damping_ratio, freqs, memo);
+export function estimate_remaining_vibrations(shaper: Shaper, test_damping_ratio: number, freqs: Float64Array | number[], psd: Float64Array | number[], memo: any = null, outBuffer: Float64Array | null = null): { fraction: number, vals: Float64Array } {
+    const vals = estimate_shaper(shaper, test_damping_ratio, freqs, memo, outBuffer);
     let psd_max = 0.0;
     for (let i = 0; i < psd.length; i++) if (psd[i] > psd_max) psd_max = psd[i];
     const vibr_threshold = psd_max / SHAPER_VIBRATION_REDUCTION;
@@ -468,13 +468,15 @@ export function scoreShapers(axisFreq: number, rawPsd: Float64Array | number[], 
         mathMemo.omega_d[k] = mathMemo.omega[k] * df;
     }
 
+    const valsBuffer = new Float64Array(freqs.length);
+
     for (const s of Object.keys(SHAPERS)) {
         let best_res: any = null;
         const test_results: any[] = [];
 
         const testFreq = (f_test: number) => {
             const shaper = SHAPERS[s](f_test, DEFAULT_DAMPING_RATIO);
-            const { fraction } = estimate_remaining_vibrations(shaper, DEFAULT_DAMPING_RATIO, freqs, rawPsd, mathMemo);
+            const { fraction } = estimate_remaining_vibrations(shaper, DEFAULT_DAMPING_RATIO, freqs, rawPsd, mathMemo, valsBuffer);
             const max_accel = find_shaper_max_accel(shaper, scv);
             const smoothing = get_shaper_smoothing(shaper, 5000, scv);
             
