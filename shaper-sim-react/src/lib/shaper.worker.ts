@@ -58,24 +58,30 @@ self.onmessage = (e: MessageEvent<{type: string, state: AppState}>) => {
       hose_squishy: state.hoseSquishy,
       squishy_materials: state.squishyFeet,
       toolhead_stiffness: state.toolheadStiffness,
+      bearing_preload: state.bearingPreload,
       belt_tension_delta: state.beltTensionDiff,
-      z_twist: state.twistZ,
+      com_offset: [state.twistX, state.twistY, state.twistZ] as [number, number, number],
       damping_ratio: state.dampingRatio,
       axis: 'x' as const,
-      toolhead_twist: state.twistX,
-      gantry_racking: 0
+      gantry_racking: 0,
+      adxl_offset: state.nozzleMountedADXL 
+        ? [state.nozzleOffsetX, state.nozzleOffsetY, state.nozzleOffsetZ] as [number, number, number]
+        : [state.adxlOffsetX, state.adxlOffsetY, state.adxlOffsetZ] as [number, number, number],
+      nozzle_offset: [state.nozzleOffsetX, state.nozzleOffsetY, state.nozzleOffsetZ] as [number, number, number]
     };
 
     const imperfectionsY = {
         ...imperfectionsX,
         axis: 'y' as const,
-        toolhead_twist: state.twistY,
         gantry_racking: state.gantryRacking
     };
 
     const speedParams = state.enableDynamicSpeed ? { print_speed: state.printSpeed } : undefined;
-    const psdX = generate_psd_curve(predX, freqs, imperfectionsX, undefined, speedParams);
-    const psdY = generate_psd_curve(predY, freqs, imperfectionsY, undefined, speedParams);
+    const psdX_adxl = generate_psd_curve(predX, freqs, imperfectionsX, undefined, speedParams, 'adxl');
+    const psdY_adxl = generate_psd_curve(predY, freqs, imperfectionsY, undefined, speedParams, 'adxl');
+
+    const psdX_nozzle = generate_psd_curve(predX, freqs, imperfectionsX, undefined, speedParams, 'nozzle');
+    const psdY_nozzle = generate_psd_curve(predY, freqs, imperfectionsY, undefined, speedParams, 'nozzle');
 
     if (type === 'PSD') {
         self.postMessage({
@@ -83,15 +89,17 @@ self.onmessage = (e: MessageEvent<{type: string, state: AppState}>) => {
             predX,
             predY,
             freqs,
-            psdX,
-            psdY
-        }, [freqs.buffer, psdX.buffer, psdY.buffer] as any);
+            psdX: psdX_adxl,
+            psdY: psdY_adxl,
+            psdX_nozzle,
+            psdY_nozzle
+        }, [freqs.buffer, psdX_adxl.buffer, psdY_adxl.buffer, psdX_nozzle.buffer, psdY_nozzle.buffer] as any);
         return;
     }
 
     if (type === 'SHAPERS') {
-        const scoreX = scoreShapers(psdX, freqs, safeMaxX, state.scv);
-        const scoreY = scoreShapers(psdY, freqs, safeMaxX, state.scv);
+        const scoreX = scoreShapers(psdX_adxl, freqs, safeMaxX, state.scv);
+        const scoreY = scoreShapers(psdY_adxl, freqs, safeMaxX, state.scv);
         
         self.postMessage({
             type: 'SHAPERS',

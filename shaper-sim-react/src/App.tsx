@@ -174,6 +174,8 @@ function App() {
     freqs: Float64Array;
     psdX: Float64Array;
     psdY: Float64Array;
+    psdX_nozzle: Float64Array;
+    psdY_nozzle: Float64Array;
     scoreX: { results: Record<string, ShaperScore>; best_shaper: string };
     scoreY: { results: Record<string, ShaperScore>; best_shaper: string };
   } | null>(null);
@@ -192,6 +194,8 @@ function App() {
           freqs: data.freqs,
           psdX: data.psdX,
           psdY: data.psdY,
+          psdX_nozzle: data.psdX_nozzle,
+          psdY_nozzle: data.psdY_nozzle,
           scoreX: prev?.scoreX || { results: {}, best_shaper: '' },
           scoreY: prev?.scoreY || { results: {}, best_shaper: '' }
         }));
@@ -242,12 +246,13 @@ function App() {
     }
   }, [state]);
 
-  const { predX = 0, predY = 0, freqs = new Float64Array(0), psdX = new Float64Array(0), psdY = new Float64Array(0), scoreX = { results: {}, best_shaper: '' }, scoreY = { results: {}, best_shaper: '' } } = workerResult || {};
+  const { predX = 0, predY = 0, freqs = new Float64Array(0), psdX = new Float64Array(0), psdY = new Float64Array(0), psdX_nozzle = new Float64Array(0), psdY_nozzle = new Float64Array(0), scoreX = { results: {}, best_shaper: '' }, scoreY = { results: {}, best_shaper: '' } } = workerResult || {};
 
   const chartData = useMemo(() => {
     if (!workerResult) return { labels: [], datasets: [] };
     const centerFreq = viewAxis === 'x' ? predX : predY;
     const psd = viewAxis === 'x' ? psdX : psdY;
+    const psdNozzle = viewAxis === 'x' ? psdX_nozzle : psdY_nozzle;
     const recommendedShaper = viewAxis === 'x' ? scoreX.best_shaper : scoreY.best_shaper;
     const activeShaper = selectedShaper === 'recommended' ? recommendedShaper : selectedShaper;
 
@@ -285,11 +290,20 @@ function App() {
     } else {
       const datasets: any[] = [
         {
-          label: `Raw PSD (${viewAxis.toUpperCase()})`,
+          label: `ADXL PSD (${viewAxis.toUpperCase()})`,
           data: Array.from(freqs).map((f, i) => ({ x: f, y: psd[i] })),
-          borderColor: '#ffffff',
+          borderColor: 'rgba(255, 255, 255, 0.4)',
           backgroundColor: 'rgba(255, 255, 255, 0.05)',
           fill: true,
+          pointRadius: 0,
+          borderWidth: 1,
+          borderDash: [2, 2],
+        },
+        {
+          label: `Actual Nozzle PSD (${viewAxis.toUpperCase()})`,
+          data: Array.from(freqs).map((f, i) => ({ x: f, y: psdNozzle[i] })),
+          borderColor: '#ffffff',
+          fill: false,
           pointRadius: 0,
           borderWidth: 2,
         }
@@ -336,12 +350,12 @@ function App() {
         const shaperFreq = score?.results?.[shaperName]?.freq ?? centerFreq;
         const shaper = shaperFunc(shaperFreq, DEFAULT_DAMPING_RATIO);
         const response = estimate_shaper(shaper, state.dampingRatio, freqs);
-        const smoothedPsd = new Float64Array(psd.length);
-        for (let i = 0; i < psd.length; i++) smoothedPsd[i] = psd[i] * response[i];
+        const smoothedPsd = new Float64Array(psdNozzle.length);
+        for (let i = 0; i < psdNozzle.length; i++) smoothedPsd[i] = psdNozzle[i] * response[i];
         
         if (shaperName === activeShaper) {
           datasets.push({
-            label: `After shaper (${shaperNames[shaperName]})`,
+            label: `After shaper (${shaperNames[shaperName]}) — nozzle`,
             data: Array.from(freqs).map((f, i) => ({ x: f, y: smoothedPsd[i] })),
             borderColor: '#00ffff', // Cyan, just like Klipper's graph
             borderWidth: 2,
@@ -516,7 +530,7 @@ function App() {
     if (!workerResult || !scoreX.best_shaper || !scoreY.best_shaper) return 'Calculating shaper recommendations...';
     const displayAccel = (a: number) => Math.round(a / 100.0) * 100.0;
     
-    let out = `Calculating shaper recommendations based on predicted ADXL PSD physics...\n\n`;
+    let out = `Calculating shaper recommendations based on ADXL PSD (Klipper-compatible).\nThe 'After shaper' graph overlay shows predicted nozzle vibration after shaping.\n\n`;
     out += `========== X AXIS (${predX.toFixed(1)} Hz) ==========\n`;
     for (const s of Object.keys(shaperNames)) {
         const r = scoreX.results[s];

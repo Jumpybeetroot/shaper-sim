@@ -305,20 +305,95 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             </div>
             <div className="control-group">
-              <label htmlFor="twistX"><span>X COM Offset (mm)</span><span className="value-display">{state.twistX} mm</span></label>
-              <input type="range" id="twistX" min="0" max="60" step="1" value={state.twistX} onChange={handleChange} />
+              <div className="tension-display" style={{ textAlign: 'left', marginBottom: '8px' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.3', display: 'inline-block' }}>
+                  <b>Tip:</b> Measure all offsets (COM, ADXL, Nozzle) as the physical distance (in mm) from the <b>linear rail carriage center</b>.<br/><br/>
+                  <b style={{ opacity: 0.8 }}>Directions (looking from front):</b><br/>
+                  <span style={{ opacity: 0.8 }}>• <b>X:</b> (-) Left / (+) Right</span><br/>
+                  <span style={{ opacity: 0.8 }}>• <b>Y:</b> (-) Front / (+) Back</span><br/>
+                  <span style={{ opacity: 0.8 }}>• <b>Z:</b> (-) Down / (+) Up</span><br/><br/>
+                  <b style={{ color: '#ffb84d', opacity: 0.9 }}>⚠ Important:</b><br/>
+                  <span style={{ opacity: 0.8 }}>Do not use any offset unless you are going to set them all correctly.</span>
+                  
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                    <button className="export-btn" style={{ padding: '4px 8px', fontSize: '11px', flex: 1 }} onClick={() => {
+                      updateState('twistX', 0); updateState('twistY', 0); updateState('twistZ', 0);
+                      updateState('adxlOffsetX', 0); updateState('adxlOffsetY', 0); updateState('adxlOffsetZ', 0);
+                      updateState('nozzleOffsetX', 0); updateState('nozzleOffsetY', 0); updateState('nozzleOffsetZ', 0);
+                      updateState('nozzleMountedADXL', false);
+                    }}>Reset All</button>
+                    <button className="export-btn" style={{ padding: '4px 8px', fontSize: '11px', flex: 1 }} onClick={() => {
+                      updateState('twistX', 0); updateState('twistY', -20); updateState('twistZ', -10);
+                      updateState('adxlOffsetX', 0); updateState('adxlOffsetY', -45); updateState('adxlOffsetZ', 15);
+                      updateState('nozzleOffsetX', 0); updateState('nozzleOffsetY', -35); updateState('nozzleOffsetZ', -40);
+                      updateState('nozzleMountedADXL', false);
+                    }}>Stealthburner</button>
+                  </div>
+                </span>
+              </div>
+              <label htmlFor="twistX"><span>X COM Offset (mm) <span style={{opacity:0.55, fontSize:'10px'}}>(affects Y-axis graph)</span></span><span className="value-display">{state.twistX} mm</span></label>
+              <input type="range" id="twistX" min="-100" max="100" step="1" value={state.twistX} onChange={handleChange} />
             </div>
             <div className="control-group">
-              <label htmlFor="twistY"><span>Y COM Offset (mm)</span><span className="value-display">{state.twistY} mm</span></label>
-              <input type="range" id="twistY" min="0" max="60" step="1" value={state.twistY} onChange={handleChange} />
+              <label htmlFor="twistY"><span>Y COM Offset (mm) <span style={{opacity:0.55, fontSize:'10px'}}>(affects X-axis graph)</span></span><span className="value-display">{state.twistY} mm</span></label>
+              <input type="range" id="twistY" min="-100" max="100" step="1" value={state.twistY} onChange={handleChange} />
             </div>
             <div className="control-group">
               <label htmlFor="twistZ"><span>Z COM Offset (mm)</span><span className="value-display">{state.twistZ} mm</span></label>
-              <input type="range" id="twistZ" min="0" max="60" step="1" value={state.twistZ} onChange={handleChange} />
+              <input type="range" id="twistZ" min="-100" max="100" step="1" value={state.twistZ} onChange={handleChange} />
+            </div>
+            <div className="control-group checkbox-group" style={{ marginTop: '10px' }}>
+              <input type="checkbox" id="nozzleMountedADXL" className="checkbox-input" checked={state.nozzleMountedADXL} onChange={handleChange} />
+              <label htmlFor="nozzleMountedADXL" className="checkbox-label">Nozzle-Mounted ADXL</label>
+            </div>
+            {!state.nozzleMountedADXL && (
+              <>
+                <div className="control-group">
+                  <label htmlFor="adxlOffsetX"><span>X ADXL Offset (mm)</span><span className="value-display">{state.adxlOffsetX} mm</span></label>
+                  <input type="range" id="adxlOffsetX" min="-100" max="100" step="1" value={state.adxlOffsetX} onChange={handleChange} />
+                </div>
+                <div className="control-group">
+                  <label htmlFor="adxlOffsetY"><span>Y ADXL Offset (mm)</span><span className="value-display">{state.adxlOffsetY} mm</span></label>
+                  <input type="range" id="adxlOffsetY" min="-100" max="100" step="1" value={state.adxlOffsetY} onChange={handleChange} />
+                </div>
+                <div className="control-group">
+                  <label htmlFor="adxlOffsetZ"><span>Z ADXL Offset (mm)</span><span className="value-display">{state.adxlOffsetZ} mm</span></label>
+                  <input type="range" id="adxlOffsetZ" min="-100" max="100" step="1" value={state.adxlOffsetZ} onChange={handleChange} />
+                </div>
+              </>
+            )}
+            <div className="control-group" style={{ marginTop: '10px' }}>
+              <label htmlFor="nozzleOffsetX"><span>X Nozzle Offset (mm)</span><span className="value-display">{state.nozzleOffsetX} mm</span></label>
+              <input type="range" id="nozzleOffsetX" min="-100" max="100" step="1" value={state.nozzleOffsetX} onChange={handleChange} />
             </div>
             <div className="control-group">
+              <label htmlFor="nozzleOffsetY"><span>Y Nozzle Offset (mm)</span><span className="value-display">{state.nozzleOffsetY} mm</span></label>
+              <input type="range" id="nozzleOffsetY" min="-100" max="100" step="1" value={state.nozzleOffsetY} onChange={handleChange} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="nozzleOffsetZ"><span>Z Nozzle Offset (mm)</span><span className="value-display">{state.nozzleOffsetZ} mm</span></label>
+              <input type="range" id="nozzleOffsetZ" min="-100" max="100" step="1" value={state.nozzleOffsetZ} onChange={handleChange} />
+            </div>
+            <div className="control-group" style={{ marginTop: '10px' }}>
               <label htmlFor="toolheadStiffness"><span>Toolhead Material Stiffness</span><span className="value-display">{state.toolheadStiffness.toFixed(1)}x</span></label>
-              <input type="range" id="toolheadStiffness" min="0.5" max="2.5" step="0.1" value={state.toolheadStiffness} onChange={handleChange} />
+              <input type="range" id="toolheadStiffness" min="1.0" max="3.0" step="0.1" value={state.toolheadStiffness} onChange={handleChange} />
+              <div style={{ marginTop: '6px', display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: '10px', rowGap: '1px', fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+                <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>1.0</span>  <span>Thick ABS/ASA (Standard)</span>
+                <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>1.5</span>  <span>Topo. Optimized Plastic / CF</span>
+                <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>2.0</span>  <span>Topo. CF / Machined Alu / Basic SLM</span>
+                <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>2.5</span>  <span>Topology Optimized CNC</span>
+                <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>3.0</span>  <span>Topology Optimized SLM</span>
+              </div>
+            </div>
+            <div className="control-group" style={{ marginTop: '10px' }}>
+              <label htmlFor="bearingPreload">X-Rail Bearing Preload</label>
+              <select id="bearingPreload" value={state.bearingPreload} onChange={(e) => updateState('bearingPreload', parseFloat(e.target.value))}>
+                <option value="0.7">MGN9 Z0 (Light / Micro-slop)</option>
+                <option value="0.85">MGN12 Z0 (Light Preload)</option>
+                <option value="1">MGN12 Z1 (Medium Preload - Standard)</option>
+                <option value="1.15">MGN12 Z2 (Heavy Preload)</option>
+                <option value="1.15">Dual MGN9 / Wide Carriage</option>
+              </select>
             </div>
           </div>
         </details>

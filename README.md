@@ -15,7 +15,7 @@ Unlike calculators that use simple empirical ratios, this simulator mathematical
 - **2WD vs AWD belt segment isolation** — AWD anchors short gantry segments, eliminating the long compliant idler paths of 2WD
 - **Klipper shaper scoring** — ZV, MZV, EI, 2HUMP_EI, 3HUMP_EI scored using a TypeScript port of Klipper's `shaper_calibrate.py`. Shaper construction uses Klipper's hardcoded `DEFAULT_DAMPING_RATIO = 0.1` to match what Klipper would actually deploy
 - **Damping slider** — affects the PSD curve shape and step response display; does not alter shaper scoring (matching Klipper's real behavior)
-- **Mechanical imperfections** — toolhead twist, hose drag, gantry racking, external sway, squishy feet, belt tension asymmetry
+- **Mechanical imperfections** — 3D Center of Mass (COM) offsets generating orthogonal Yaw/Pitch/Roll torques, ADXL vs Nozzle sensor offset discrepancies, bearing preload frictional damping, hose drag, gantry racking, external sway, squishy feet, belt tension asymmetry
 - **PSD mode** — overlays all five shapers as toggleable legend items; shows recommended shaper and max accel per axis
 - **Step response mode** — 2nd-order underdamped time-domain view showing how the selected shaper flatlines ringing
 - **Snapshot (ghost graphs)** — lock a baseline curve, then watch the live curve shift as you change parameters

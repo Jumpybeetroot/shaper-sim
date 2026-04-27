@@ -19,7 +19,15 @@ export interface AppState {
   twistX: number;
   twistY: number;
   twistZ: number;
+  adxlOffsetX: number;
+  adxlOffsetY: number;
+  adxlOffsetZ: number;
+  nozzleOffsetX: number;
+  nozzleOffsetY: number;
+  nozzleOffsetZ: number;
+  nozzleMountedADXL: boolean;
   toolheadStiffness: number;
+  bearingPreload: number;
   beltTensionDiff: number;
   gantryRacking: number;
   externalSway: number;
@@ -51,7 +59,15 @@ export const defaultState: AppState = {
   twistX: 0,
   twistY: 0,
   twistZ: 0,
+  adxlOffsetX: 0,
+  adxlOffsetY: 0,
+  adxlOffsetZ: 0,
+  nozzleOffsetX: 0,
+  nozzleOffsetY: 0,
+  nozzleOffsetZ: 0,
+  nozzleMountedADXL: false,
   toolheadStiffness: 1.0,
+  bearingPreload: 1.0,
   beltTensionDiff: 0,
   gantryRacking: 0,
   externalSway: 0,

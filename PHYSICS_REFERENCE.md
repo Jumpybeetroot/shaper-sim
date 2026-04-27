@@ -104,7 +104,7 @@ The simulator ports Klipper's exact post-processing math from `shaper_calibrate.
 
 1. **PSD generation:** `generate_psd_curve()` produces a Lorentzian peak centered on the predicted resonance frequency. Width = `center_freq * damping_ratio` (HWHM of $|H(\omega)|^2$). Peak amplitude ∝ $Q^2$ because `TEST_RESONANCES` runs a steady-state chirp, not an impulse.
 
-2. **Mechanical imperfections:** Sliders like Toolhead Twist, Hose Drag, and Gantry Racking inject secondary frequency harmonics into the PSD curve, mimicking real ADXL graphs.
+2. **Mechanical imperfections:** Sliders like 3D COM Offsets, Bearing Preload, Hose Drag, and Gantry Racking inject geometrically calculated secondary frequency harmonics into the PSD curve. The simulator uses the right-hand rule to calculate orthogonal Yaw, Pitch, and Roll torques based on COM offsets. The amplitude of the resulting vibration peak is evaluated based on the exact 3D mounting offset of the ADXL sensor versus the Nozzle, and heavily damped by sliding friction from the rail bearing preload.
 
 3. **Shaper scoring:** `scoreShapers()` tests all five shapers. For each it runs a coarse 2 Hz sweep followed by a 0.2 Hz fine sweep around the minimum vibration pocket — matching Klipper's two-pass strategy. Scoring uses Klipper's empirical formula:
    $$\text{score} = \text{smoothing} \times \left(v^{1.5} + 0.2v + 0.01\right)$$
