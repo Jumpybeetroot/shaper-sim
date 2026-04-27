@@ -139,7 +139,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ state, updateState, predX, pre
         <div className="control-group">
           <label htmlFor="beltTune">
             <span>Gates Belt Tune (Hz @ 150mm span)</span>
-            <span className="value-display">{state.beltTune} Hz</span>
           </label>
           <input type="range" id="beltTune" min="50" max="400" step="1" value={state.beltTune} onChange={handleChange} />
           <div className="tension-display">
