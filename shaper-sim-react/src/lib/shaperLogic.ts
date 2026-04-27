@@ -456,8 +456,8 @@ export function scoreShapers(axisFreq: number, rawPsd: Float64Array | number[], 
     for (const s of Object.keys(SHAPERS)) {
         let best_res: any = null;
         const test_results: any[] = [];
-        
-        for (let f_test = 10.0; f_test <= max_hz; f_test += 0.2) {
+
+        const testFreq = (f_test: number) => {
             const shaper = SHAPERS[s](f_test, DEFAULT_DAMPING_RATIO);
             const { fraction } = estimate_remaining_vibrations(shaper, DEFAULT_DAMPING_RATIO, freqs, rawPsd);
             const max_accel = find_shaper_max_accel(shaper, scv);
@@ -472,10 +472,26 @@ export function scoreShapers(axisFreq: number, rawPsd: Float64Array | number[], 
             if (!best_res || res.vibrs < best_res.vibrs) {
                 best_res = res;
             }
-        }
+        };
         
+        // Pass 1: Coarse sweep (2.0 Hz steps) to find the absolute minimum vibration pocket
+        for (let f_test = 10.0; f_test <= max_hz; f_test += 2.0) {
+            testFreq(f_test);
+        }
+
+        // Pass 2: Fine sweep (+/- 2.0 Hz around coarse best_res, 0.2 Hz steps)
+        const coarse_best = best_res.freq;
+        const fine_min = Math.max(10.0, coarse_best - 2.0);
+        const fine_max = Math.min(max_hz, coarse_best + 2.0);
+        for (let f_test = fine_min; f_test <= fine_max; f_test += 0.2) {
+            testFreq(f_test);
+        }
+
+        // Sort ascending by frequency to match Klipper's evaluation order (lowest to highest)
+        test_results.sort((a, b) => a.freq - b.freq);
+
         let selected = best_res;
-        for (let i = test_results.length - 1; i >= 0; i--) {
+        for (let i = 0; i < test_results.length; i++) {
             const res = test_results[i];
             if (res.vibrs < best_res.vibrs * 1.1 + 0.0005 && res.score < selected.score) {
                 selected = res;
