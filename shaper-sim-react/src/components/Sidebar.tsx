@@ -1,5 +1,6 @@
 import React from 'react';
 import type { AppState } from '../types';
+import { getBeltTensionN } from '../lib/beltUtils';
 import { CaretDown, FloppyDisk, Sliders, Cube, Trash, ArrowCounterClockwise, Waveform } from '@phosphor-icons/react';
 
 interface SidebarProps {
@@ -20,6 +21,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   state, updateState, resetToDefault, predX, predY, scoreX, scoreY, profiles, saveProfile, loadProfile, deleteProfile 
 }) => {
   const [selectedProfile, setSelectedProfile] = React.useState<string>('');
+  const profileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { id, value, type } = e.target;
@@ -85,7 +87,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="profile-actions">
             <input 
               type="text" 
-              id="newProfileName" 
+              ref={profileInputRef}
               className="profile-input" 
               placeholder="New Profile Name..." 
             />
@@ -93,12 +95,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className="btn-icon btn-save" 
               title="Save Profile" 
               onClick={() => {
-                const input = document.getElementById('newProfileName') as HTMLInputElement;
-                const name = input?.value;
+                const name = profileInputRef.current?.value;
                 if (name) {
                   saveProfile(name);
                   setSelectedProfile(name);
-                  input.value = '';
+                  profileInputRef.current!.value = '';
                 }
               }}
             >
@@ -200,13 +201,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </label>
           <input type="range" id="beltTune" min="50" max="400" step="1" value={state.beltTune} onChange={handleChange} />
           <div className="tension-display">
-            <span>{state.beltTune} Hz (~{(() => {
-              let beltDensity = 0.0084;
-              if (state.beltType === 18000) beltDensity = 0.0126;
-              else if (state.beltType === 20000) beltDensity = 0.0140;
-              else if (state.beltType === 25000) beltDensity = 0.0168;
-              return (4 * beltDensity * Math.pow(0.15, 2) * Math.pow(state.beltTune, 2)).toFixed(1);
-            })()} N)</span>
+            <span>{state.beltTune} Hz (~{getBeltTensionN(state.beltType, state.beltTune).toFixed(1)} N)</span>
           </div>
         </div>
         <div className="control-group">
@@ -339,7 +334,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <input type="range" id="twistY" min="-100" max="100" step="1" value={state.twistY} onChange={handleChange} />
             </div>
             <div className="control-group">
-              <label htmlFor="twistZ"><span>Z COM Offset (mm)</span><span className="value-display">{state.twistZ} mm</span></label>
+              <label htmlFor="twistZ"><span>Z COM Offset (mm) <span style={{opacity:0.55, fontSize:'10px'}}>(affects both axes)</span></span><span className="value-display">{state.twistZ} mm</span></label>
               <input type="range" id="twistZ" min="-100" max="100" step="1" value={state.twistZ} onChange={handleChange} />
             </div>
             <div className="control-group checkbox-group" style={{ marginTop: '10px' }}>
@@ -392,7 +387,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <option value="0.85">MGN12 Z0 (Light Preload)</option>
                 <option value="1">MGN12 Z1 (Medium Preload - Standard)</option>
                 <option value="1.15">MGN12 Z2 (Heavy Preload)</option>
-                <option value="1.15">Dual MGN9 / Wide Carriage</option>
+                <option value="1.2">Dual MGN9 / Wide Carriage</option>
               </select>
             </div>
           </div>

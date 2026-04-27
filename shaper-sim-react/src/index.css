@@ -248,21 +248,7 @@ input[type="number"]:focus, select:focus {
     color: var(--text-secondary);
 }
 
-.prediction-box {
-    margin-top: 24px;
-    background: rgba(112, 0, 255, 0.1);
-    border: 1px solid rgba(112, 0, 255, 0.3);
-    border-radius: 8px;
-    padding: 16px;
-    text-align: center;
-}
-
-.prediction-box h4 {
-    font-size: 12px;
-    text-transform: uppercase;
-    color: var(--text-secondary);
-    margin-bottom: 8px;
-}
+/* prediction-box styles are defined below (line ~676) */
 
 .prediction-freq {
     display: flex;

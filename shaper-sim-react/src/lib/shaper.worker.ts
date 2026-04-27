@@ -1,15 +1,12 @@
 import { predict_resonance, generate_psd_curve, scoreShapers } from './shaperLogic';
+import { getBeltDensity, getBeltTensionN } from './beltUtils';
 import type { AppState } from '../types';
 
 self.onmessage = (e: MessageEvent<{type: string, state: AppState}>) => {
     const { type, state } = e.data;
 
-    let beltDensity = 0.0084; // default 6mm
-    if (state.beltType === 18000) beltDensity = 0.0126; // 9mm
-    else if (state.beltType === 20000) beltDensity = 0.0140; // 10mm
-    else if (state.beltType === 25000) beltDensity = 0.0168; // 12mm
-
-    const tensionN = 4 * beltDensity * Math.pow(0.15, 2) * Math.pow(state.beltTune, 2);
+    const beltDensity = getBeltDensity(state.beltType);
+    const tensionN = getBeltTensionN(state.beltType, state.beltTune);
 
     const predX = predict_resonance(
       state.toolheadWeight,
@@ -84,6 +81,9 @@ self.onmessage = (e: MessageEvent<{type: string, state: AppState}>) => {
     const psdY_nozzle = generate_psd_curve(predY, freqs, imperfectionsY, undefined, speedParams, 'nozzle');
 
     if (type === 'PSD') {
+        // Do NOT use transferable buffers — the SHAPERS handler may fire
+        // before this message is received, and transferred buffers become
+        // detached (zero-length), corrupting subsequent scoreShapers() calls.
         self.postMessage({
             type: 'PSD',
             predX,
@@ -93,7 +93,7 @@ self.onmessage = (e: MessageEvent<{type: string, state: AppState}>) => {
             psdY: psdY_adxl,
             psdX_nozzle,
             psdY_nozzle
-        }, [freqs.buffer, psdX_adxl.buffer, psdY_adxl.buffer, psdX_nozzle.buffer, psdY_nozzle.buffer] as any);
+        });
         return;
     }
 

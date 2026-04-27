@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChartDisplay } from './components/ChartDisplay';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { defaultState } from './types';
 import type { AppState } from './types';
 import { SHAPERS, DEFAULT_DAMPING_RATIO, estimate_shaper, generate_step_responses } from './lib/shaperLogic';
@@ -112,7 +113,7 @@ function App() {
   useEffect(() => {
     const saved = localStorage.getItem('shaperSim_state');
     if (saved) {
-      try { setState(JSON.parse(saved)); } catch (e) {}
+      try { setState(() => ({ ...defaultState, ...JSON.parse(saved) })); } catch (e) {}
     }
   }, []);
 
@@ -215,36 +216,34 @@ function App() {
     };
   }, []);
 
+  // Sanitize NaN values once before posting to worker
+  const getSafeState = useCallback((): AppState => {
+    const safe = { ...state };
+    for (const key in safe) {
+      const k = key as keyof AppState;
+      if (typeof safe[k] === 'number' && isNaN(safe[k] as number)) {
+        (safe as Record<string, unknown>)[k] = defaultState[k];
+      }
+    }
+    return safe;
+  }, [state]);
+
   // Instant PSD update for smooth graph interaction
   useEffect(() => {
     if (workerRef.current) {
-      const safeState = { ...state };
-      for (const key in safeState) {
-        const k = key as keyof AppState;
-        if (typeof safeState[k] === 'number' && isNaN(safeState[k] as number)) {
-          (safeState as any)[k] = defaultState[k];
-        }
-      }
-      workerRef.current.postMessage({ type: 'PSD', state: safeState });
+      workerRef.current.postMessage({ type: 'PSD', state: getSafeState() });
     }
-  }, [state]);
+  }, [getSafeState]);
 
   // Debounced SHAPERS update for heavy math
   useEffect(() => {
     if (workerRef.current) {
       const handler = setTimeout(() => {
-        const safeState = { ...state };
-        for (const key in safeState) {
-          const k = key as keyof AppState;
-          if (typeof safeState[k] === 'number' && isNaN(safeState[k] as number)) {
-            (safeState as any)[k] = defaultState[k];
-          }
-        }
-        workerRef.current?.postMessage({ type: 'SHAPERS', state: safeState });
+        workerRef.current?.postMessage({ type: 'SHAPERS', state: getSafeState() });
       }, 150);
       return () => clearTimeout(handler);
     }
-  }, [state]);
+  }, [getSafeState]);
 
   const { predX = 0, predY = 0, freqs = new Float64Array(0), psdX = new Float64Array(0), psdY = new Float64Array(0), psdX_nozzle = new Float64Array(0), psdY_nozzle = new Float64Array(0), scoreX = { results: {}, best_shaper: '' }, scoreY = { results: {}, best_shaper: '' } } = workerResult || {};
 
@@ -346,6 +345,21 @@ function App() {
 
       const score = viewAxis === 'x' ? scoreX : scoreY;
       Object.keys(SHAPERS).forEach(shaperName => {
+        // Only compute the active shaper eagerly; other shapers start hidden
+        if (shaperName !== activeShaper) {
+          datasets.push({
+            label: shaperNames[shaperName],
+            data: [],
+            borderColor: colors[shaperName],
+            borderWidth: 1.5,
+            borderDash: [3, 3],
+            fill: false,
+            pointRadius: 0,
+            hidden: true,
+          });
+          return;
+        }
+
         const shaperFunc = SHAPERS[shaperName];
         const shaperFreq = score?.results?.[shaperName]?.freq ?? centerFreq;
         const shaper = shaperFunc(shaperFreq, DEFAULT_DAMPING_RATIO);
@@ -353,28 +367,15 @@ function App() {
         const smoothedPsd = new Float64Array(psdNozzle.length);
         for (let i = 0; i < psdNozzle.length; i++) smoothedPsd[i] = psdNozzle[i] * response[i];
         
-        if (shaperName === activeShaper) {
-          datasets.push({
-            label: `After shaper (${shaperNames[shaperName]}) — nozzle`,
-            data: Array.from(freqs).map((f, i) => ({ x: f, y: smoothedPsd[i] })),
-            borderColor: '#00ffff', // Cyan, just like Klipper's graph
-            borderWidth: 2,
-            borderDash: [5, 5],
-            fill: false,
-            pointRadius: 0,
-          });
-        } else {
-          datasets.push({
-            label: shaperNames[shaperName],
-            data: Array.from(freqs).map((f, i) => ({ x: f, y: smoothedPsd[i] })),
-            borderColor: colors[shaperName],
-            borderWidth: 1.5,
-            borderDash: [3, 3],
-            fill: false,
-            pointRadius: 0,
-            hidden: true, // Hide by default, user can click legend to toggle on
-          });
-        }
+        datasets.push({
+          label: `After shaper (${shaperNames[shaperName]}) — nozzle`,
+          data: Array.from(freqs).map((f, i) => ({ x: f, y: smoothedPsd[i] })),
+          borderColor: '#00ffff',
+          borderWidth: 2,
+          borderDash: [5, 5],
+          fill: false,
+          pointRadius: 0,
+        });
       });
 
       return { labels: [], datasets };
@@ -677,4 +678,12 @@ function App() {
   );
 }
 
-export default App;
+function AppWrapper() {
+  return (
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
+}
+
+export default AppWrapper;

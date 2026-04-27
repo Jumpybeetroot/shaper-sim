@@ -14,6 +14,19 @@ export const SHAPER_VIBRATION_REDUCTION = 20.0;
 export const DEFAULT_DAMPING_RATIO = 0.1;
 export const KLIPPER_TARGET_SMOOTHING = 0.12;
 
+// --- Torsion Model Tuning Constants --- //
+// Normalizer distance (mm) — calibrated so a Stealthburner at COM_Y=20, sensor_Y=45
+// produces ~15% secondary amplitude relative to primary peak.
+const TORSION_NORMALIZER_MM = 70.0;
+const YAW_FREQ_MULT = 1.25;           // Yaw torsional mode frequency multiplier
+const YAW_FREQ_FLOOR = 1.20;          // Minimum frequency clamp for yaw
+const YAW_AMP_COEFF = 0.8;            // Yaw amplitude coefficient
+const ROLL_PITCH_FREQ_MULT = 1.15;    // Roll/Pitch torsional mode frequency multiplier
+const ROLL_PITCH_FREQ_FLOOR = 1.15;   // Minimum frequency clamp for roll/pitch
+const ROLL_PITCH_AMP_COEFF = 0.6;     // Roll/Pitch amplitude coefficient
+const TORSION_DAMPING_WIDTH = 1.333;  // Lorentzian half-width damping factor
+const PRELOAD_DAMPING_EXP = 1.5;      // Exponent for bearing preload → damping conversion
+
 export interface Shaper {
     A: number[];
     T: number[];
@@ -328,45 +341,33 @@ export function generate_psd_curve(center_freq: number, freqs: Float64Array | nu
 
         // 2. Yaw Secondary Peak
         if (Math.abs(yaw_torque) > 0 && Math.abs(yaw_measurement) > 0) {
-            const torque_factor = Math.abs(yaw_torque) / 70.0; 
-            const measurement_factor = Math.abs(yaw_measurement) / 70.0;
+            const torque_factor = Math.abs(yaw_torque) / TORSION_NORMALIZER_MM; 
+            const measurement_factor = Math.abs(yaw_measurement) / TORSION_NORMALIZER_MM;
             const combined_factor = torque_factor * measurement_factor;
             
             const stiffness_multiplier = toolhead_stiffness * bearing_preload;
-            
-            // Frequency scales with sqrt(stiffness), but clamp the bottom end to reflect non-linear bearing slop (it hits the steel rail eventually)
-            const base_freq_mult = 1.25;
-            const freq_multiplier = Math.max(1.2, base_freq_mult * Math.sqrt(stiffness_multiplier));
+            const freq_multiplier = Math.max(YAW_FREQ_FLOOR, YAW_FREQ_MULT * Math.sqrt(stiffness_multiplier));
             const twist_freq = center_freq * freq_multiplier;
             
-            // Tighter bearings drastically increase sliding friction (damping) for off-axis twisting.
-            const preload_damping_factor = Math.pow(bearing_preload, 1.5);
-            
-            // Resonance amplitude drops inversely proportional to torsional stiffness (k) AND damping ratio (zeta).
-            const twist_amp = (base_amplitude * combined_factor * 0.8) / (stiffness_multiplier * preload_damping_factor);  
-            
-            // Peak width widens with increased damping
-            const twist_w = twist_freq * damping_ratio * 1.333 * preload_damping_factor; 
+            const preload_damping_factor = Math.pow(bearing_preload, PRELOAD_DAMPING_EXP);
+            const twist_amp = (base_amplitude * combined_factor * YAW_AMP_COEFF) / (stiffness_multiplier * preload_damping_factor);  
+            const twist_w = twist_freq * damping_ratio * TORSION_DAMPING_WIDTH * preload_damping_factor; 
             val += twist_amp / (1.0 + Math.pow((f - twist_freq) / twist_w, 2.0));
         }
 
         // 3. Roll/Pitch Secondary Peak
         if (Math.abs(roll_pitch_torque) > 0 && Math.abs(roll_pitch_measurement) > 0) {
-            const torque_factor = Math.abs(roll_pitch_torque) / 70.0;
-            const measurement_factor = Math.abs(roll_pitch_measurement) / 70.0;
+            const torque_factor = Math.abs(roll_pitch_torque) / TORSION_NORMALIZER_MM;
+            const measurement_factor = Math.abs(roll_pitch_measurement) / TORSION_NORMALIZER_MM;
             const combined_factor = torque_factor * measurement_factor;
 
             const stiffness_multiplier = toolhead_stiffness * bearing_preload;
-            
-            const base_freq_mult = 1.15;
-            const freq_multiplier = Math.max(1.15, base_freq_mult * Math.sqrt(stiffness_multiplier));
+            const freq_multiplier = Math.max(ROLL_PITCH_FREQ_FLOOR, ROLL_PITCH_FREQ_MULT * Math.sqrt(stiffness_multiplier));
             const rp_freq = center_freq * freq_multiplier;
             
-            // Tighter bearings drastically increase sliding friction (damping) for off-axis twisting.
-            const preload_damping_factor = Math.pow(bearing_preload, 1.5);
-            
-            const rp_amp = (base_amplitude * combined_factor * 0.6) / (stiffness_multiplier * preload_damping_factor); 
-            const rp_w = rp_freq * damping_ratio * 1.333 * preload_damping_factor;
+            const preload_damping_factor = Math.pow(bearing_preload, PRELOAD_DAMPING_EXP);
+            const rp_amp = (base_amplitude * combined_factor * ROLL_PITCH_AMP_COEFF) / (stiffness_multiplier * preload_damping_factor); 
+            const rp_w = rp_freq * damping_ratio * TORSION_DAMPING_WIDTH * preload_damping_factor;
             val += rp_amp / (1.0 + Math.pow((f - rp_freq) / rp_w, 2.0));
         }
 
