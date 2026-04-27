@@ -7,12 +7,6 @@ interface SidebarProps {
   state: AppState;
   updateState: (key: keyof AppState, value: number | boolean | string) => void;
   resetToDefault: () => void;
-  predX: number;
-  predY: number;
-  compX: { belt: number; frame: number; motor: number };
-  compY: { belt: number; frame: number; motor: number };
-  scoreX: { results: Record<string, import('../lib/shaperLogic').ShaperScore>; best_shaper: string };
-  scoreY: { results: Record<string, import('../lib/shaperLogic').ShaperScore>; best_shaper: string };
   profiles: string[];
   saveProfile: (name: string) => void;
   loadProfile: (name: string) => void;
@@ -20,7 +14,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
-  state, updateState, resetToDefault, predX, predY, compX, compY, scoreX, scoreY, profiles, saveProfile, loadProfile, deleteProfile 
+  state, updateState, resetToDefault, profiles, saveProfile, loadProfile, deleteProfile 
 }) => {
   const [selectedProfile, setSelectedProfile] = React.useState<string>('');
   const profileInputRef = React.useRef<HTMLInputElement>(null);
@@ -34,8 +28,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       updateState(id as keyof AppState, val);
     }
   };
-
-  const displayAccel = (a: number) => Math.round(a / 100.0) * 100.0;
 
   return (
     <aside className="sidebar">
@@ -446,59 +438,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </details>
       </details>
 
-      <div className="control-section">
-        <div className="prediction-box mt-0">
-          <h4>Predicted Resonance</h4>
-          <div className="prediction-freq-list">
-            <div className="prediction-item">
-              <span className="axis-label">X Axis</span>
-              <span className="freq-val">{predX.toFixed(1)} Hz</span>
-              {compX && compX.belt > 0 && (
-                <div className="compliance-bar-container" title={`Compliance: Belt ${compX.belt.toFixed(1)}%, Motor ${compX.motor.toFixed(1)}%, Frame ${compX.frame.toFixed(1)}%`}>
-                  <div className="compliance-bar">
-                    <div className="compliance-segment belt" style={{ width: `${compX.belt}%` }}></div>
-                    <div className="compliance-segment motor" style={{ width: `${compX.motor}%` }}></div>
-                    <div className="compliance-segment frame" style={{ width: `${compX.frame}%` }}></div>
-                  </div>
-                  <div className="compliance-labels">
-                    <span className="label-belt">Belt</span>
-                    <span className="label-motor">Motor</span>
-                    <span className="label-frame">Frame</span>
-                  </div>
-                </div>
-              )}
-              {scoreX?.best_shaper && (
-                <div className="shaper-detail">
-                  {displayAccel(scoreX.results[scoreX.best_shaper].max_accel)} mm/s² | {scoreX.best_shaper}
-                </div>
-              )}
-            </div>
-            <div className="prediction-item">
-              <span className="axis-label">Y Axis</span>
-              <span className="freq-val">{(predY || 0).toFixed(1)} Hz</span>
-              {compY && compY.belt > 0 && (
-                <div className="compliance-bar-container" title={`Compliance: Belt ${compY.belt.toFixed(1)}%, Motor ${compY.motor.toFixed(1)}%, Frame ${compY.frame.toFixed(1)}%`}>
-                  <div className="compliance-bar">
-                    <div className="compliance-segment belt" style={{ width: `${compY.belt}%` }}></div>
-                    <div className="compliance-segment motor" style={{ width: `${compY.motor}%` }}></div>
-                    <div className="compliance-segment frame" style={{ width: `${compY.frame}%` }}></div>
-                  </div>
-                  <div className="compliance-labels">
-                    <span className="label-belt">Belt</span>
-                    <span className="label-motor">Motor</span>
-                    <span className="label-frame">Frame</span>
-                  </div>
-                </div>
-              )}
-              {scoreY?.best_shaper && (
-                <div className="shaper-detail">
-                  {displayAccel(scoreY.results[scoreY.best_shaper].max_accel)} mm/s² | {scoreY.best_shaper}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
     </aside>
   );
 };

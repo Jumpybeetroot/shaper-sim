@@ -28,9 +28,10 @@ interface ChartDisplayProps {
   data: ChartData<'line'>;
   options: ChartOptions<'line'>;
   plugins?: any[];
+  children?: React.ReactNode;
 }
 
-export const ChartDisplay: React.FC<ChartDisplayProps> = ({ data, options, plugins }) => {
+export const ChartDisplay: React.FC<ChartDisplayProps> = ({ data, options, plugins, children }) => {
   const mergedOptions = useMemo(() => {
     return {
       ...options,
@@ -42,6 +43,7 @@ export const ChartDisplay: React.FC<ChartDisplayProps> = ({ data, options, plugi
   return (
     <div className="chart-container">
       <Line data={data} options={mergedOptions} plugins={plugins} />
+      {children}
     </div>
   );
 };

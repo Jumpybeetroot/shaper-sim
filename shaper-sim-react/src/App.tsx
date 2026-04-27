@@ -563,12 +563,6 @@ function App() {
         state={state} 
         updateState={updateState} 
         resetToDefault={resetToDefault}
-        predX={predX} 
-        predY={predY}
-        compX={compX}
-        compY={compY}
-        scoreX={scoreX}
-        scoreY={scoreY}
         profiles={Object.keys(profiles)}
         saveProfile={saveProfile}
         loadProfile={loadProfile}
@@ -659,7 +653,61 @@ function App() {
           </div>
         </header>
         
-        <ChartDisplay data={chartData} options={chartOptions} plugins={plugins} />
+        <ChartDisplay data={chartData} options={chartOptions} plugins={plugins}>
+          <div className="prediction-overlay">
+            <div className="prediction-box mt-0">
+              <h4>Predicted Resonance</h4>
+              <div className="prediction-freq-list">
+                <div className="prediction-item">
+                  <span className="axis-label">X Axis</span>
+                  <span className="freq-val">{predX.toFixed(1)} Hz</span>
+                  {compX && compX.belt > 0 && (
+                    <div className="compliance-bar-container" title={`Compliance: Belt ${compX.belt.toFixed(1)}%, Motor ${compX.motor.toFixed(1)}%, Frame ${compX.frame.toFixed(1)}%`}>
+                      <div className="compliance-bar">
+                        <div className="compliance-segment belt" style={{ width: `${compX.belt}%` }}></div>
+                        <div className="compliance-segment motor" style={{ width: `${compX.motor}%` }}></div>
+                        <div className="compliance-segment frame" style={{ width: `${compX.frame}%` }}></div>
+                      </div>
+                      <div className="compliance-labels">
+                        <span className="label-belt">Belt</span>
+                        <span className="label-motor">Motor</span>
+                        <span className="label-frame">Frame</span>
+                      </div>
+                    </div>
+                  )}
+                  {scoreX?.best_shaper && (
+                    <div className="shaper-detail">
+                      {Math.round(scoreX.results[scoreX.best_shaper].max_accel / 100.0) * 100.0} mm/s² | {scoreX.best_shaper}
+                    </div>
+                  )}
+                </div>
+                <div className="prediction-item">
+                  <span className="axis-label">Y Axis</span>
+                  <span className="freq-val">{(predY || 0).toFixed(1)} Hz</span>
+                  {compY && compY.belt > 0 && (
+                    <div className="compliance-bar-container" title={`Compliance: Belt ${compY.belt.toFixed(1)}%, Motor ${compY.motor.toFixed(1)}%, Frame ${compY.frame.toFixed(1)}%`}>
+                      <div className="compliance-bar">
+                        <div className="compliance-segment belt" style={{ width: `${compY.belt}%` }}></div>
+                        <div className="compliance-segment motor" style={{ width: `${compY.motor}%` }}></div>
+                        <div className="compliance-segment frame" style={{ width: `${compY.frame}%` }}></div>
+                      </div>
+                      <div className="compliance-labels">
+                        <span className="label-belt">Belt</span>
+                        <span className="label-motor">Motor</span>
+                        <span className="label-frame">Frame</span>
+                      </div>
+                    </div>
+                  )}
+                  {scoreY?.best_shaper && (
+                    <div className="shaper-detail">
+                      {Math.round(scoreY.results[scoreY.best_shaper].max_accel / 100.0) * 100.0} mm/s² | {scoreY.best_shaper}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </ChartDisplay>
 
         <div className="bottom-panels">
           <div className="panel">

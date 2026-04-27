@@ -668,6 +668,24 @@ input[type="number"]:focus, select:focus {
     text-align: center;
 }
 
+.prediction-overlay {
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.prediction-overlay .prediction-box {
+    pointer-events: auto;
+    margin-top: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    background: rgba(15, 17, 26, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-color: rgba(112, 0, 255, 0.5);
+}
+
 .prediction-box h4 {
     font-size: 11px;
     text-transform: uppercase;
