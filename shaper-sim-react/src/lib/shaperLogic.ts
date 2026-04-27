@@ -497,7 +497,7 @@ export function scoreShapers(rawPsd: Float64Array | number[], freqs: Float64Arra
         }
 
         // Pass 2: Fine sweep (+/- 2.0 Hz around coarse best_res, 0.2 Hz steps)
-        const coarse_best = best_res.freq;
+        const coarse_best = best_res!.freq;
         const fine_min = Math.max(10.0, coarse_best - 2.0);
         const fine_max = Math.min(max_hz, coarse_best + 2.0);
         for (let f_test = fine_min; f_test <= fine_max; f_test += 0.2) {
@@ -507,10 +507,10 @@ export function scoreShapers(rawPsd: Float64Array | number[], freqs: Float64Arra
         // Sort ascending by frequency to match Klipper's evaluation order (lowest to highest)
         test_results.sort((a, b) => a.freq - b.freq);
 
-        let selected = best_res;
+        let selected = best_res!;
         for (let i = 0; i < test_results.length; i++) {
             const res = test_results[i];
-            if (res.vibrs < best_res.vibrs * 1.1 + 0.0005 && res.score < selected.score) {
+            if (res.vibrs < best_res!.vibrs * 1.1 + 0.0005 && res.score < selected.score) {
                 selected = res;
             }
         }
@@ -538,7 +538,7 @@ export function scoreShapers(rawPsd: Float64Array | number[], freqs: Float64Arra
     // Klipper's final override: If ZV is selected but another shaper has >10% better vibration reduction, use it instead.
     if (best_shaper === 'zv') {
         for (const tuned_shaper of all_shapers) {
-            if (tuned_shaper.name !== 'zv' && tuned_shaper.vibrations * 1.1 < best_shaper_obj.vibrations) {
+            if (tuned_shaper.name !== 'zv' && tuned_shaper.vibrations * 1.1 < best_shaper_obj!.vibrations) {
                 best_shaper = tuned_shaper.name;
                 best_shaper_obj = tuned_shaper;
                 break;

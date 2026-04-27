@@ -393,12 +393,12 @@ function App() {
       },
       plugins: {
         legend: {
-          position: 'top',
+          position: 'top' as const,
           labels: {
             color: 'rgba(255, 255, 255, 0.9)',
             usePointStyle: true,
             padding: 20,
-            font: { size: 13, weight: '500' }
+            font: { size: 13, weight: 500 }
           }
         },
         tooltip: {
@@ -414,7 +414,7 @@ function App() {
       scales: {
         x: {
           type: 'linear' as const,
-          title: { display: true, text: isStep ? 'Time (ms)' : 'Frequency (Hz)', color: 'rgba(255, 255, 255, 0.9)', font: { weight: 'bold' } },
+          title: { display: true, text: isStep ? 'Time (ms)' : 'Frequency (Hz)', color: 'rgba(255, 255, 255, 0.9)', font: { weight: 'bold' as const } },
           max: isStep ? undefined : state.maxX,
           ticks: { maxTicksLimit: isStep ? 20 : undefined, color: 'rgba(255, 255, 255, 0.7)' },
           grid: { color: 'rgba(255, 255, 255, 0.05)' }
@@ -423,7 +423,7 @@ function App() {
           title: { 
               display: true, 
               text: isStep ? 'Position (Step Response)' : `Power spectral density (1e${psdExponent})`,
-              color: 'rgba(255, 255, 255, 0.9)', font: { weight: 'bold' }
+              color: 'rgba(255, 255, 255, 0.9)', font: { weight: 'bold' as const }
           },
           beginAtZero: true,
           grid: { color: 'rgba(255, 255, 255, 0.05)' },

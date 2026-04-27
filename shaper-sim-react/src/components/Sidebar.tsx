@@ -1,10 +1,10 @@
 import React from 'react';
 import type { AppState } from '../types';
-import { CaretDown, FloppyDisk, Sliders, Cube, ChartLineUp, Trash, ArrowCounterClockwise, Waveform } from '@phosphor-icons/react';
+import { CaretDown, FloppyDisk, Sliders, Cube, Trash, ArrowCounterClockwise, Waveform } from '@phosphor-icons/react';
 
 interface SidebarProps {
   state: AppState;
-  updateState: (key: keyof AppState, value: number | boolean) => void;
+  updateState: (key: keyof AppState, value: number | boolean | string) => void;
   resetToDefault: () => void;
   predX: number;
   predY: number;
