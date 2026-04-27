@@ -181,62 +181,149 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </label>
           <input type="range" id="frameStiffness" min="0.5" max="10.0" step="0.1" value={state.frameStiffness} onChange={handleChange} />
         </div>
+
+        <details className="sub-category">
+          <summary>Stepper Motors (A/B Drives)</summary>
+          <div className="sub-category-content">
+            <div className="control-group">
+              <label htmlFor="motorPreset">Motor Preset</label>
+              <select id="motorPreset" value={state.motorPreset} onChange={(e) => {
+                const val = e.target.value;
+                updateState('motorPreset', val);
+                const motorPresets: Record<string, {torque: number, inertia: number}> = {
+                    'ldo-48': { torque: 550, inertia: 84.5 },
+                    'ldo-40': { torque: 450, inertia: 54.0 },
+                    'ldo-kraken': { torque: 800, inertia: 138.0 },
+                    'moons': { torque: 550, inertia: 82.0 },
+                    'stepperonline': { torque: 590, inertia: 82.0 },
+                    'excit3d-max': { torque: 560, inertia: 82.0 }
+                };
+                if (val !== 'custom' && motorPresets[val]) {
+                    updateState('motorTorque', motorPresets[val].torque);
+                    updateState('motorInertia', motorPresets[val].inertia);
+                }
+              }}>
+                <option value="custom">Custom...</option>
+                <option value="ldo-48">LDO-42STH48-2504AC</option>
+                <option value="ldo-40">LDO-42STH40-1684AC</option>
+                <option value="ldo-kraken">LDO-42STH60-3004HA (Kraken)</option>
+                <option value="moons">Moons MS17HD6P4200</option>
+                <option value="stepperonline">StepperOnline 17HS19</option>
+                <option value="excit3d-max">Excit3D MaxMotor</option>
+              </select>
+            </div>
+            <div className="control-group">
+              <label htmlFor="motorTorque">Rated Holding Torque (mNm)</label>
+              <input type="number" id="motorTorque" value={state.motorTorque} step="10" onChange={(e) => {
+                updateState('motorPreset', 'custom');
+                updateState('motorTorque', parseFloat(e.target.value));
+              }} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="motorInertia">Rotor Inertia (g·cm²)</label>
+              <input type="number" id="motorInertia" value={state.motorInertia} step="0.1" onChange={(e) => {
+                updateState('motorPreset', 'custom');
+                updateState('motorInertia', parseFloat(e.target.value));
+              }} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="motorCurrent">
+                <span>Run Current</span>
+                <span className="value-display">{state.motorCurrent}%</span>
+              </label>
+              <input type="range" id="motorCurrent" min="10" max="150" step="1" value={state.motorCurrent} onChange={handleChange} />
+            </div>
+          </div>
+        </details>
+
+        <details className="sub-category">
+          <summary>Experimental Physics (Advanced)</summary>
+          <div className="sub-category-content">
+            <div className="control-group checkbox-group">
+              <input type="checkbox" id="enableDynamicSpeed" className="checkbox-input" checked={state.enableDynamicSpeed} onChange={handleChange} />
+              <label htmlFor="enableDynamicSpeed" className="checkbox-label">Enable Speed Simulation</label>
+            </div>
+            <div className={`control-group ${!state.enableDynamicSpeed ? 'disabled-group' : ''}`}>
+              <label htmlFor="printSpeed">
+                <span>Print Speed (mm/s)</span>
+                <span className="value-display">{state.printSpeed} mm/s</span>
+              </label>
+              <input type="range" id="printSpeed" min="0" max="1000" step="10" value={state.printSpeed} onChange={handleChange} disabled={!state.enableDynamicSpeed} />
+            </div>
+          </div>
+        </details>
       </details>
 
       <details className="control-section">
         <summary>
-          <h3><Sliders weight="bold" /> Imperfections<CaretDown size={16} className="ml-auto ph-caret-down" /></h3>
+          <h3><Sliders weight="bold" /> Mechanical Imperfections<CaretDown size={16} className="ml-auto ph-caret-down" /></h3>
         </summary>
-        <div className="sub-category-content">
-          <div className="control-group">
-            <label htmlFor="twistX"><span>X Twist Offset</span><span className="value-display">{state.twistX} mm</span></label>
-            <input type="range" id="twistX" min="0" max="50" step="1" value={state.twistX} onChange={handleChange} />
+        
+        <details className="sub-category">
+          <summary>Drive System & Frame</summary>
+          <div className="sub-category-content">
+            <div className="control-group">
+              <label htmlFor="beltTensionDiff"><span>Belt Tension Delta</span><span className="value-display">{state.beltTensionDiff}%</span></label>
+              <input type="range" id="beltTensionDiff" min="0" max="50" step="5" value={state.beltTensionDiff} onChange={handleChange} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="gantryRacking"><span>Gantry Racking (Y only)</span><span className="value-display">{state.gantryRacking}%</span></label>
+              <input type="range" id="gantryRacking" min="0" max="100" step="5" value={state.gantryRacking} onChange={handleChange} />
+            </div>
           </div>
-          <div className="control-group">
-            <label htmlFor="twistY"><span>Y Twist Offset</span><span className="value-display">{state.twistY} mm</span></label>
-            <input type="range" id="twistY" min="0" max="50" step="1" value={state.twistY} onChange={handleChange} />
+        </details>
+
+        <details className="sub-category">
+          <summary>Mechanical Play & Twist</summary>
+          <div className="sub-category-content">
+            <div className="control-group">
+              <label htmlFor="twistX"><span>X Twist Offset</span><span className="value-display">{state.twistX} mm</span></label>
+              <input type="range" id="twistX" min="0" max="50" step="1" value={state.twistX} onChange={handleChange} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="twistY"><span>Y Twist Offset</span><span className="value-display">{state.twistY} mm</span></label>
+              <input type="range" id="twistY" min="0" max="50" step="1" value={state.twistY} onChange={handleChange} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="twistZ"><span>Z Twist Offset (Tall)</span><span className="value-display">{state.twistZ} mm</span></label>
+              <input type="range" id="twistZ" min="0" max="50" step="1" value={state.twistZ} onChange={handleChange} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="toolheadStiffness"><span>Toolhead Stiffness</span><span className="value-display">{state.toolheadStiffness.toFixed(1)}x</span></label>
+              <input type="range" id="toolheadStiffness" min="0.2" max="3.0" step="0.1" value={state.toolheadStiffness} onChange={handleChange} />
+            </div>
           </div>
-          <div className="control-group">
-            <label htmlFor="twistZ"><span>Z Twist Offset (Tall)</span><span className="value-display">{state.twistZ} mm</span></label>
-            <input type="range" id="twistZ" min="0" max="50" step="1" value={state.twistZ} onChange={handleChange} />
+        </details>
+
+        <details className="sub-category">
+          <summary>External & Umbilical</summary>
+          <div className="sub-category-content">
+            <div className="control-group">
+              <label htmlFor="externalSway"><span>External Sway</span><span className="value-display">{state.externalSway}%</span></label>
+              <input type="range" id="externalSway" min="0" max="100" step="5" value={state.externalSway} onChange={handleChange} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="externalSwayFreq"><span>Sway Frequency (Hz)</span><span className="value-display">{state.externalSwayFreq} Hz</span></label>
+              <input type="range" id="externalSwayFreq" min="5" max="35" step="1" value={state.externalSwayFreq} onChange={handleChange} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="squishyFeet"><span>Squishy Materials</span><span className="value-display">{state.squishyFeet}%</span></label>
+              <input type="range" id="squishyFeet" min="0" max="100" step="5" value={state.squishyFeet} onChange={handleChange} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="hoseDrag"><span>Hose Drag Amplitude</span><span className="value-display">{state.hoseDrag}%</span></label>
+              <input type="range" id="hoseDrag" min="0" max="100" step="5" value={state.hoseDrag} onChange={handleChange} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="hoseDragFreq"><span>Hose Drag Freq (Hz)</span><span className="value-display">{state.hoseDragFreq} Hz</span></label>
+              <input type="range" id="hoseDragFreq" min="5" max="35" step="1" value={state.hoseDragFreq} onChange={handleChange} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="hoseSquishy"><span>Hose Damping</span><span className="value-display">{state.hoseSquishy}%</span></label>
+              <input type="range" id="hoseSquishy" min="0" max="100" step="5" value={state.hoseSquishy} onChange={handleChange} />
+            </div>
           </div>
-          <div className="control-group">
-            <label htmlFor="toolheadStiffness"><span>Toolhead Stiffness</span><span className="value-display">{state.toolheadStiffness.toFixed(1)}x</span></label>
-            <input type="range" id="toolheadStiffness" min="0.2" max="3.0" step="0.1" value={state.toolheadStiffness} onChange={handleChange} />
-          </div>
-          <div className="control-group">
-            <label htmlFor="beltTensionDiff"><span>Belt Tension Delta</span><span className="value-display">{state.beltTensionDiff}%</span></label>
-            <input type="range" id="beltTensionDiff" min="0" max="50" step="5" value={state.beltTensionDiff} onChange={handleChange} />
-          </div>
-          <div className="control-group">
-            <label htmlFor="gantryRacking"><span>Gantry Racking (Y only)</span><span className="value-display">{state.gantryRacking}%</span></label>
-            <input type="range" id="gantryRacking" min="0" max="100" step="5" value={state.gantryRacking} onChange={handleChange} />
-          </div>
-          <div className="control-group">
-            <label htmlFor="externalSway"><span>External Sway</span><span className="value-display">{state.externalSway}%</span></label>
-            <input type="range" id="externalSway" min="0" max="100" step="5" value={state.externalSway} onChange={handleChange} />
-          </div>
-          <div className="control-group">
-            <label htmlFor="externalSwayFreq"><span>Sway Frequency (Hz)</span><span className="value-display">{state.externalSwayFreq} Hz</span></label>
-            <input type="range" id="externalSwayFreq" min="5" max="35" step="1" value={state.externalSwayFreq} onChange={handleChange} />
-          </div>
-          <div className="control-group">
-            <label htmlFor="squishyFeet"><span>Squishy Materials</span><span className="value-display">{state.squishyFeet}%</span></label>
-            <input type="range" id="squishyFeet" min="0" max="100" step="5" value={state.squishyFeet} onChange={handleChange} />
-          </div>
-          <div className="control-group">
-            <label htmlFor="hoseDrag"><span>Hose Drag Amplitude</span><span className="value-display">{state.hoseDrag}%</span></label>
-            <input type="range" id="hoseDrag" min="0" max="100" step="5" value={state.hoseDrag} onChange={handleChange} />
-          </div>
-          <div className="control-group">
-            <label htmlFor="hoseDragFreq"><span>Hose Drag Freq (Hz)</span><span className="value-display">{state.hoseDragFreq} Hz</span></label>
-            <input type="range" id="hoseDragFreq" min="5" max="35" step="1" value={state.hoseDragFreq} onChange={handleChange} />
-          </div>
-          <div className="control-group">
-            <label htmlFor="hoseSquishy"><span>Hose Damping</span><span className="value-display">{state.hoseSquishy}%</span></label>
-            <input type="range" id="hoseSquishy" min="0" max="100" step="5" value={state.hoseSquishy} onChange={handleChange} />
-          </div>
-        </div>
+        </details>
       </details>
 
       <div className="control-section">
