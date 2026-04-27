@@ -454,13 +454,27 @@ export function scoreShapers(axisFreq: number, rawPsd: Float64Array | number[], 
     let all_shapers: any[] = [];
     let results: Record<string, ShaperScore> = {};
 
+    // Memoize the frequency math once for all shaper iterations
+    const mathMemo = {
+        omega: new Float64Array(freqs.length),
+        damping: new Float64Array(freqs.length),
+        omega_d: new Float64Array(freqs.length),
+        length: freqs.length
+    };
+    const df = Math.sqrt(1.0 - DEFAULT_DAMPING_RATIO * DEFAULT_DAMPING_RATIO);
+    for (let k = 0; k < freqs.length; k++) {
+        mathMemo.omega[k] = 2.0 * Math.PI * (freqs[k] as number);
+        mathMemo.damping[k] = DEFAULT_DAMPING_RATIO * mathMemo.omega[k];
+        mathMemo.omega_d[k] = mathMemo.omega[k] * df;
+    }
+
     for (const s of Object.keys(SHAPERS)) {
         let best_res: any = null;
         const test_results: any[] = [];
 
         const testFreq = (f_test: number) => {
             const shaper = SHAPERS[s](f_test, DEFAULT_DAMPING_RATIO);
-            const { fraction } = estimate_remaining_vibrations(shaper, DEFAULT_DAMPING_RATIO, freqs, rawPsd);
+            const { fraction } = estimate_remaining_vibrations(shaper, DEFAULT_DAMPING_RATIO, freqs, rawPsd, mathMemo);
             const max_accel = find_shaper_max_accel(shaper, scv);
             const smoothing = get_shaper_smoothing(shaper, 5000, scv);
             
