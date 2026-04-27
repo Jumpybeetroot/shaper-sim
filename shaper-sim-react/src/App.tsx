@@ -663,11 +663,11 @@ function App() {
                   <span className="axis-label">X Axis</span>
                   <span className="freq-val">{predX.toFixed(1)} Hz</span>
                   {compX && compX.belt > 0 && (
-                    <div className="compliance-bar-container" title={`Compliance: Belt ${compX.belt.toFixed(1)}%, Motor ${compX.motor.toFixed(1)}%, Frame ${compX.frame.toFixed(1)}%`}>
+                    <div className="compliance-bar-container">
                       <div className="compliance-bar">
-                        <div className="compliance-segment belt" style={{ width: `${compX.belt}%` }}></div>
-                        <div className="compliance-segment motor" style={{ width: `${compX.motor}%` }}></div>
-                        <div className="compliance-segment frame" style={{ width: `${compX.frame}%` }}></div>
+                        <div className="compliance-segment belt" style={{ width: `${compX.belt}%` }} title={`Belt: ${compX.belt.toFixed(1)}%`}></div>
+                        <div className="compliance-segment motor" style={{ width: `${compX.motor}%` }} title={`Motor: ${compX.motor.toFixed(1)}%`}></div>
+                        <div className="compliance-segment frame" style={{ width: `${compX.frame}%` }} title={`Frame: ${compX.frame.toFixed(1)}%`}></div>
                       </div>
                       <div className="compliance-labels">
                         <span className="label-belt">Belt</span>
@@ -686,11 +686,11 @@ function App() {
                   <span className="axis-label">Y Axis</span>
                   <span className="freq-val">{(predY || 0).toFixed(1)} Hz</span>
                   {compY && compY.belt > 0 && (
-                    <div className="compliance-bar-container" title={`Compliance: Belt ${compY.belt.toFixed(1)}%, Motor ${compY.motor.toFixed(1)}%, Frame ${compY.frame.toFixed(1)}%`}>
+                    <div className="compliance-bar-container">
                       <div className="compliance-bar">
-                        <div className="compliance-segment belt" style={{ width: `${compY.belt}%` }}></div>
-                        <div className="compliance-segment motor" style={{ width: `${compY.motor}%` }}></div>
-                        <div className="compliance-segment frame" style={{ width: `${compY.frame}%` }}></div>
+                        <div className="compliance-segment belt" style={{ width: `${compY.belt}%` }} title={`Belt: ${compY.belt.toFixed(1)}%`}></div>
+                        <div className="compliance-segment motor" style={{ width: `${compY.motor}%` }} title={`Motor: ${compY.motor.toFixed(1)}%`}></div>
+                        <div className="compliance-segment frame" style={{ width: `${compY.frame}%` }} title={`Frame: ${compY.frame.toFixed(1)}%`}></div>
                       </div>
                       <div className="compliance-labels">
                         <span className="label-belt">Belt</span>

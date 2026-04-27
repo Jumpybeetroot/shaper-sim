@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 interface DraggableOverlayProps {
   children: React.ReactNode;
@@ -13,6 +13,15 @@ export const DraggableOverlay: React.FC<DraggableOverlayProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
   const initialPos = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const handleResize = () => {
+      // Snap back to default origin when window resizes to prevent getting lost off-screen
+      setPosition({ x: 0, y: 0 });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     // Only accept left clicks or touches
