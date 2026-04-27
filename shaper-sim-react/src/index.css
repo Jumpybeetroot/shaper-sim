@@ -62,8 +62,7 @@ body {
     gap: 12px;
 }
 
-.sidebar-header i {
-    font-size: 28px;
+.sidebar-header svg {
     color: var(--accent-primary);
 }
 
@@ -116,11 +115,11 @@ details.control-section:not([open]) h3 {
     margin-bottom: 24px; /* Move the padding to the margin of the h3 so it acts as bottom spacing */
 }
 
-details.control-section summary i.ph-caret-down {
+details.control-section summary svg.ph-caret-down {
     transition: transform 0.2s ease;
 }
 
-details.control-section:not([open]) summary i.ph-caret-down {
+details.control-section:not([open]) summary svg.ph-caret-down {
     transform: rotate(-90deg);
 }
 
@@ -297,7 +296,7 @@ input[type="number"]:focus, select:focus {
     color: var(--text-primary);
 }
 
-.drop-zone i {
+.drop-zone svg {
     font-size: 24px;
     margin-bottom: 8px;
     color: var(--accent-primary);
@@ -332,7 +331,7 @@ input[type="number"]:focus, select:focus {
     text-decoration: underline;
 }
 
-.btn-text i {
+.btn-text svg {
     font-size: 14px;
 }
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import type { AppState } from '../types';
-import { CaretDown, FloppyDisk, Sliders, Cube, WaveSine, Trash } from '@phosphor-icons/react';
+import { CaretDown, FloppyDisk, Sliders, Cube, ChartLineUp, Trash } from '@phosphor-icons/react';
 
 interface SidebarProps {
   state: AppState;
@@ -28,12 +28,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ state, updateState, predX, pre
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <WaveSine size={32} />
+        <ChartLineUp size={28} weight="duotone" />
         <h2>ShaperSim</h2>
       </div>
 
       <details className="control-section highlighted-section" open>
-        <summary><h3 className="highlighted-title"><FloppyDisk size={18} /> Tuning Profiles<CaretDown size={18} className="ml-auto" /></h3></summary>
+        <summary><h3 className="highlighted-title"><FloppyDisk size={18} weight="duotone" /> Tuning Profiles<CaretDown size={18} className="ml-auto ph-caret-down" /></h3></summary>
         <div className="control-group">
           <select className="profile-select" value={selectedProfile} onChange={e => {
               setSelectedProfile(e.target.value);
@@ -52,19 +52,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ state, updateState, predX, pre
                       setSelectedProfile(name);
                       input.value = '';
                   }
-              }}><FloppyDisk size={18} /></button>
+              }}><FloppyDisk size={16} weight="duotone" /></button>
               <button className="btn-icon btn-delete" title="Delete Selected" onClick={() => {
                   if (selectedProfile && window.confirm(`Delete profile '${selectedProfile}'?`)) {
                       deleteProfile(selectedProfile);
                       setSelectedProfile('');
                   }
-              }} disabled={!selectedProfile}><Trash size={18} /></button>
+              }} disabled={!selectedProfile}><Trash size={16} weight="duotone" /></button>
           </div>
         </div>
       </details>
 
       <details className="control-section" open>
-        <summary><h3><Sliders size={16} /> Simulation Settings<CaretDown size={16} className="ml-auto" /></h3></summary>
+        <summary><h3><Sliders size={16} weight="duotone" /> Simulation Settings<CaretDown size={16} className="ml-auto ph-caret-down" /></h3></summary>
         <div className="control-group">
           <label htmlFor="dampingRatio">
             <span>Damping Ratio</span>
@@ -87,7 +87,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ state, updateState, predX, pre
       </details>
 
       <details className="control-section" open>
-        <summary><h3>Graph Settings<CaretDown size={16} className="ml-auto" /></h3></summary>
+        <summary><h3>Graph Settings<CaretDown size={16} className="ml-auto ph-caret-down" /></h3></summary>
         <div className="control-group">
           <label htmlFor="maxX">Max Frequency (Hz)</label>
           <input type="number" id="maxX" value={state.maxX} step="10" min="50" max="400" onChange={handleChange} />
@@ -95,7 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ state, updateState, predX, pre
       </details>
 
       <details className="control-section" open>
-        <summary><h3><Cube size={16} /> CoreXY Mechanicals<CaretDown size={16} className="ml-auto" /></h3></summary>
+        <summary><h3><Cube size={16} weight="duotone" /> CoreXY Mechanicals<CaretDown size={16} className="ml-auto ph-caret-down" /></h3></summary>
         <div className="control-group">
           <label htmlFor="driveType">Drive Configuration</label>
           <select id="driveType" value={state.driveType} onChange={handleChange}>
@@ -258,7 +258,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ state, updateState, predX, pre
       </details>
 
       <details className="control-section">
-        <summary><h3>Mechanical Imperfections<CaretDown size={16} className="ml-auto" /></h3></summary>
+        <summary><h3>Mechanical Imperfections<CaretDown size={16} className="ml-auto ph-caret-down" /></h3></summary>
         <details className="sub-category">
           <summary>Drive System & Frame</summary>
           <div className="sub-category-content">
