@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChartDisplay } from './components/ChartDisplay';
 import { defaultState } from './types';
@@ -250,6 +250,14 @@ function App() {
         intersect: false,
       },
       plugins: {
+        legend: {
+          position: 'top',
+          labels: {
+            usePointStyle: true,
+            padding: 20,
+            font: { size: 13, weight: '500' }
+          }
+        },
         tooltip: {
           callbacks: {
             label: function(context: any) {
@@ -284,10 +292,16 @@ function App() {
     };
   }, [state.maxX, graphMode]);
 
+  const chartParamsRef = useRef({ predX, predY, viewAxis, psdX, psdY, graphMode });
+  useEffect(() => {
+    chartParamsRef.current = { predX, predY, viewAxis, psdX, psdY, graphMode };
+  }, [predX, predY, viewAxis, psdX, psdY, graphMode]);
+
   const plugins = useMemo(() => {
     return [{
       id: 'verticalLines',
       beforeDraw: (chart: any) => {
+        const { predX, predY, viewAxis, psdX, psdY, graphMode } = chartParamsRef.current;
         if (graphMode === 'step') return;
         const ctx = chart.ctx;
         const xAxis = chart.scales.x;
