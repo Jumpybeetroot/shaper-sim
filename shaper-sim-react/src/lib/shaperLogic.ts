@@ -166,22 +166,28 @@ function _bisect(func: (val: number) => boolean): number {
     let right = 1.0;
     if (!func(1e-9) || isNaN(left)) return 0.0;
 
-    while (!func(left)) {
+    let iterations = 0;
+    while (!func(left) && left > 1e-15 && iterations < 100) {
         right = left;
         left *= 0.5;
+        iterations++;
     }
     if (right === left) {
-        while (func(right)) {
+        iterations = 0;
+        while (func(right) && right < 1e9 && iterations < 100) {
             right *= 2.0;
+            iterations++;
         }
     }
-    while (right - left > 1e-8) {
+    iterations = 0;
+    while (right - left > 1e-8 && iterations < 100) {
         const middle = (left + right) * 0.5;
         if (func(middle)) {
             left = middle;
         } else {
             right = middle;
         }
+        iterations++;
     }
     return left;
 }

@@ -74,7 +74,11 @@ function App() {
   }, [profiles]);
 
   const updateState = useCallback((key: keyof AppState, value: number | boolean | string) => {
-    setState(prev => ({ ...prev, [key]: value }));
+    let finalValue = value;
+    if (key === 'maxX' && typeof value === 'number') {
+      finalValue = Math.min(1000, Math.max(10, value));
+    }
+    setState(prev => ({ ...prev, [key]: finalValue }));
   }, []);
 
   const predX = useMemo(() => {
@@ -110,7 +114,8 @@ function App() {
   }, [state]);
 
   const baseMath = useMemo(() => {
-    const freqs = Array.from({ length: Math.floor(state.maxX / 0.5) }, (_, i) => (i + 1) * 0.5);
+    const safeMaxX = Math.min(1000, Math.max(10, state.maxX || 0));
+    const freqs = Array.from({ length: Math.floor(safeMaxX / 0.5) }, (_, i) => (i + 1) * 0.5);
     const centerFreq = viewAxis === 'x' ? predX : predY;
 
     const imperfections: Imperfections = {
