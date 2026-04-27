@@ -293,9 +293,7 @@ function App() {
   }, [state.maxX, graphMode]);
 
   const chartParamsRef = useRef({ predX, predY, viewAxis, psdX, psdY, graphMode });
-  useEffect(() => {
-    chartParamsRef.current = { predX, predY, viewAxis, psdX, psdY, graphMode };
-  }, [predX, predY, viewAxis, psdX, psdY, graphMode]);
+  chartParamsRef.current = { predX, predY, viewAxis, psdX, psdY, graphMode };
 
   const plugins = useMemo(() => {
     return [{
