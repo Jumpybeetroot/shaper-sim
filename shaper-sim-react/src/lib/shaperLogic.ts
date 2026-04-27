@@ -450,7 +450,8 @@ export interface ShaperScore {
 
 export function scoreShapers(axisFreq: number, rawPsd: Float64Array | number[], freqs: Float64Array | number[], max_hz: number, scv: number, damping: number): { results: Record<string, ShaperScore>, best_shaper: string } {
     let best_shaper = '';
-    let best_score = -1;
+    let best_shaper_obj: any = null;
+    let all_shapers: any[] = [];
     let results: Record<string, ShaperScore> = {};
 
     for (const s of Object.keys(SHAPERS)) {
@@ -498,22 +499,38 @@ export function scoreShapers(axisFreq: number, rawPsd: Float64Array | number[], 
             }
         }
 
-        results[s] = {
+        const final_shaper_result = {
             max_accel: selected.max_accel,
             vibrations: selected.vibrs * 100.0,
             smoothing: selected.smoothing,
-            freq: selected.freq
+            freq: selected.freq,
+            score: selected.score,
+            name: s
         };
+        
+        results[s] = final_shaper_result;
+        all_shapers.push(final_shaper_result);
 
-        if (selected.vibrs <= 0.05) { // Klipper rejects shapers that leave >5% vibrations
-            if (selected.max_accel > best_score) {
-                best_score = selected.max_accel;
-                best_shaper = s;
+        // Klipper's empirical shaper selection logic
+        if (!best_shaper_obj || final_shaper_result.score * 1.2 < best_shaper_obj.score ||
+            (final_shaper_result.score * 1.05 < best_shaper_obj.score && final_shaper_result.smoothing * 1.1 < best_shaper_obj.smoothing)) {
+            best_shaper_obj = final_shaper_result;
+            best_shaper = s;
+        }
+    }
+
+    // Klipper's final override: If ZV is selected but another shaper has >10% better vibration reduction, use it instead.
+    if (best_shaper === 'zv') {
+        for (const tuned_shaper of all_shapers) {
+            if (tuned_shaper.name !== 'zv' && tuned_shaper.vibrations * 1.1 < best_shaper_obj.vibrations) {
+                best_shaper = tuned_shaper.name;
+                best_shaper_obj = tuned_shaper;
+                break;
             }
         }
     }
 
-    // Fallback: if all fail 5% threshold, pick the one with lowest vibrations
+    // Fallback if somehow no shaper was selected
     if (!best_shaper) {
         let min_vib = 1000;
         for (const s of Object.keys(results)) {
