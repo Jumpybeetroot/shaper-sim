@@ -7,6 +7,8 @@ interface SidebarProps {
   updateState: (key: keyof AppState, value: number | boolean) => void;
   predX: number;
   predY: number;
+  scoreX: any;
+  scoreY: any;
   profiles: string[];
   saveProfile: (name: string) => void;
   loadProfile: (name: string) => void;
@@ -269,49 +271,85 @@ export const Sidebar: React.FC<SidebarProps> = ({ state, updateState, predX, pre
             </div>
           </div>
         </details>
+        </div>
       </details>
 
-      <details className="control-section">
-        <summary><h3>Mechanical Imperfections<CaretDown size={16} className="ml-auto ph-caret-down" /></h3></summary>
+      <details className="control-category">
+        <summary><Cube weight="bold" /> Drive System</summary>
+        <div className="control-group">
+          <label htmlFor="driveType"><span>Drive Type</span></label>
+          <select id="driveType" value={state.driveType} onChange={handleChange}>
+            <option value={2}>CoreXY (2WD)</option>
+            <option value={4}>CoreXY (4WD)</option>
+          </select>
+        </div>
+        <div className="control-group">
+          <label htmlFor="motorTorque"><span>Motor Torque (mNm)</span><span className="value-display">{state.motorTorque}</span></label>
+          <input type="range" id="motorTorque" min="200" max="1200" step="50" value={state.motorTorque} onChange={handleChange} />
+        </div>
+        <div className="control-group">
+          <label htmlFor="motorCurrent"><span>Motor Current (%)</span><span className="value-display">{state.motorCurrent}%</span></label>
+          <input type="range" id="motorCurrent" min="10" max="150" step="5" value={state.motorCurrent} onChange={handleChange} />
+        </div>
+        <div className="control-group">
+          <label htmlFor="motorInertia"><span>Rotor Inertia (g·cm²)</span><span className="value-display">{state.motorInertia}</span></label>
+          <input type="range" id="motorInertia" min="20" max="200" step="5" value={state.motorInertia} onChange={handleChange} />
+        </div>
+      </details>
+
+      <details className="control-category">
+        <summary><Sliders weight="bold" /> Imperfections</summary>
+        
         <details className="sub-category">
-          <summary>Drive System & Frame</summary>
+          <summary>Mechanical Play & Twist</summary>
           <div className="sub-category-content">
             <div className="control-group">
-              <label htmlFor="beltTensionDiff"><span>Unequal Belt Tension</span><span className="value-display">{state.beltTensionDiff}%</span></label>
-              <input type="range" id="beltTensionDiff" min="0" max="30" step="1" value={state.beltTensionDiff} onChange={handleChange} />
+              <label htmlFor="twistX"><span>X Twist Offset</span><span className="value-display">{state.twistX} mm</span></label>
+              <input type="range" id="twistX" min="0" max="50" step="1" value={state.twistX} onChange={handleChange} />
             </div>
             <div className="control-group">
-              <label htmlFor="gantryRacking"><span>Y-Axis Gantry Racking</span><span className="value-display">{state.gantryRacking}%</span></label>
-              <input type="range" id="gantryRacking" min="0" max="100" step="5" value={state.gantryRacking} onChange={handleChange} />
+              <label htmlFor="twistY"><span>Y Twist Offset</span><span className="value-display">{state.twistY} mm</span></label>
+              <input type="range" id="twistY" min="0" max="50" step="1" value={state.twistY} onChange={handleChange} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="twistZ"><span>Z Twist Offset (Tall)</span><span className="value-display">{state.twistZ} mm</span></label>
+              <input type="range" id="twistZ" min="0" max="50" step="1" value={state.twistZ} onChange={handleChange} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="thStiff"><span>Toolhead Stiffness</span><span className="value-display">{state.thStiff.toFixed(1)}x</span></label>
+              <input type="range" id="thStiff" min="0.2" max="3.0" step="0.1" value={state.thStiff} onChange={handleChange} />
             </div>
           </div>
         </details>
+
         <details className="sub-category">
-          <summary>External & Umbilical</summary>
+          <summary>Belt Issues</summary>
           <div className="sub-category-content">
             <div className="control-group">
-              <label htmlFor="externalSway"><span>External Sway Amplitude</span><span className="value-display">{state.externalSway}%</span></label>
+              <label htmlFor="beltDiff"><span>Belt Tension Delta</span><span className="value-display">{state.beltDiff}%</span></label>
+              <input type="range" id="beltDiff" min="0" max="50" step="5" value={state.beltDiff} onChange={handleChange} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="racking"><span>Gantry Racking (Y only)</span><span className="value-display">{state.racking}%</span></label>
+              <input type="range" id="racking" min="0" max="100" step="5" value={state.racking} onChange={handleChange} />
+            </div>
+          </div>
+        </details>
+
+        <details className="sub-category">
+          <summary>External Factors</summary>
+          <div className="sub-category-content">
+            <div className="control-group">
+              <label htmlFor="externalSway"><span>External Sway</span><span className="value-display">{state.externalSway}%</span></label>
               <input type="range" id="externalSway" min="0" max="100" step="5" value={state.externalSway} onChange={handleChange} />
             </div>
             <div className="control-group">
-              <label htmlFor="externalSwayFreq"><span>External Sway Freq (Hz)</span><span className="value-display">{state.externalSwayFreq} Hz</span></label>
-              <input type="range" id="externalSwayFreq" min="5" max="35" step="1" value={state.externalSwayFreq} onChange={handleChange} />
+              <label htmlFor="swayFreq"><span>Sway Frequency (Hz)</span><span className="value-display">{state.swayFreq} Hz</span></label>
+              <input type="range" id="swayFreq" min="5" max="35" step="1" value={state.swayFreq} onChange={handleChange} />
             </div>
             <div className="control-group">
               <label htmlFor="squishyFeet"><span>Squishy Materials</span><span className="value-display">{state.squishyFeet}%</span></label>
               <input type="range" id="squishyFeet" min="0" max="100" step="5" value={state.squishyFeet} onChange={handleChange} />
-            </div>
-            <div className="control-group">
-              <label htmlFor="hoseDrag"><span>Hose Drag Amplitude</span><span className="value-display">{state.hoseDrag}%</span></label>
-              <input type="range" id="hoseDrag" min="0" max="100" step="5" value={state.hoseDrag} onChange={handleChange} />
-            </div>
-            <div className="control-group">
-              <label htmlFor="hoseDragFreq"><span>Hose Drag Freq (Hz)</span><span className="value-display">{state.hoseDragFreq} Hz</span></label>
-              <input type="range" id="hoseDragFreq" min="5" max="35" step="1" value={state.hoseDragFreq} onChange={handleChange} />
-            </div>
-            <div className="control-group">
-              <label htmlFor="hoseSquishy"><span>Hose Damping</span><span className="value-display">{state.hoseSquishy}%</span></label>
-              <input type="range" id="hoseSquishy" min="0" max="100" step="5" value={state.hoseSquishy} onChange={handleChange} />
             </div>
           </div>
         </details>
@@ -320,9 +358,25 @@ export const Sidebar: React.FC<SidebarProps> = ({ state, updateState, predX, pre
       <div className="control-section">
         <div className="prediction-box mt-0">
           <h4>Predicted Resonance</h4>
-          <div className="prediction-freq">
-            <span>X: {predX ? `${predX.toFixed(1)} Hz` : '-- Hz'}</span>
-            <span>Y: {predY ? `${predY.toFixed(1)} Hz` : '-- Hz'}</span>
+          <div className="prediction-freq-list">
+            <div className="prediction-item">
+              <span className="axis-label">X:</span>
+              <span className="freq-val">{predX.toFixed(1)} Hz</span>
+              {scoreX?.best_shaper && (
+                <div className="shaper-detail">
+                  {displayAccel(scoreX.results[scoreX.best_shaper].max_accel)} mm/s² | {scoreX.best_shaper}
+                </div>
+              )}
+            </div>
+            <div className="prediction-item">
+              <span className="axis-label">Y:</span>
+              <span className="freq-val">{(predY || 0).toFixed(1)} Hz</span>
+              {scoreY?.best_shaper && (
+                <div className="shaper-detail">
+                  {displayAccel(scoreY.results[scoreY.best_shaper].max_accel)} mm/s² | {scoreY.best_shaper}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

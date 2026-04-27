@@ -382,6 +382,8 @@ function App() {
         updateState={updateState} 
         predX={predX} 
         predY={predY}
+        scoreX={scoreX}
+        scoreY={scoreY}
         profiles={Object.keys(profiles)}
         saveProfile={saveProfile}
         loadProfile={loadProfile}
