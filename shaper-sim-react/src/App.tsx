@@ -670,9 +670,9 @@ function App() {
                         <div className="compliance-segment frame" style={{ width: `${compX.frame}%` }} title={`Frame: ${compX.frame.toFixed(1)}%`}></div>
                       </div>
                       <div className="compliance-labels">
-                        <span className="label-belt">Belt</span>
-                        <span className="label-motor">Motor</span>
-                        <span className="label-frame">Frame</span>
+                        <span className="label-belt">Belt {Math.round(compX.belt)}%</span>
+                        <span className="label-motor">Motor {Math.round(compX.motor)}%</span>
+                        <span className="label-frame">Frame {Math.round(compX.frame)}%</span>
                       </div>
                     </div>
                   )}
@@ -693,9 +693,9 @@ function App() {
                         <div className="compliance-segment frame" style={{ width: `${compY.frame}%` }} title={`Frame: ${compY.frame.toFixed(1)}%`}></div>
                       </div>
                       <div className="compliance-labels">
-                        <span className="label-belt">Belt</span>
-                        <span className="label-motor">Motor</span>
-                        <span className="label-frame">Frame</span>
+                        <span className="label-belt">Belt {Math.round(compY.belt)}%</span>
+                        <span className="label-motor">Motor {Math.round(compY.motor)}%</span>
+                        <span className="label-frame">Frame {Math.round(compY.frame)}%</span>
                       </div>
                     </div>
                   )}
