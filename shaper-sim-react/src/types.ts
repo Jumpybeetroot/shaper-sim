@@ -1,0 +1,63 @@
+export interface AppState {
+  dampingRatio: number;
+  scv: number;
+  maxX: number;
+  driveType: number;
+  toolheadWeight: number;
+  yGantryWeight: number;
+  printerSize: number;
+  beltLength: number;
+  beltType: number;
+  beltTune: number;
+  frameStiffness: number;
+  motorPreset: string;
+  motorTorque: number;
+  motorInertia: number;
+  motorCurrent: number;
+  enableDynamicSpeed: boolean;
+  printSpeed: number;
+  twistX: number;
+  twistY: number;
+  twistZ: number;
+  toolheadStiffness: number;
+  beltTensionDiff: number;
+  gantryRacking: number;
+  externalSway: number;
+  externalSwayFreq: number;
+  squishyFeet: number;
+  hoseDrag: number;
+  hoseDragFreq: number;
+  hoseSquishy: number;
+}
+
+export const defaultState: AppState = {
+  dampingRatio: 0.1,
+  scv: 5.0,
+  maxX: 250,
+  driveType: 2,
+  toolheadWeight: 450,
+  yGantryWeight: 650,
+  printerSize: 350,
+  beltLength: 2200,
+  beltType: 12000,
+  beltTune: 110,
+  frameStiffness: 1.0,
+  motorPreset: 'ldo-48',
+  motorTorque: 550,
+  motorInertia: 84.5,
+  motorCurrent: 100,
+  enableDynamicSpeed: false,
+  printSpeed: 100,
+  twistX: 0,
+  twistY: 0,
+  twistZ: 0,
+  toolheadStiffness: 1.0,
+  beltTensionDiff: 0,
+  gantryRacking: 0,
+  externalSway: 0,
+  externalSwayFreq: 18,
+  squishyFeet: 0,
+  hoseDrag: 0,
+  hoseDragFreq: 5,
+  hoseSquishy: 0
+};
