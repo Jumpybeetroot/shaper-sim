@@ -241,6 +241,20 @@ function App() {
 
   const chartOptions = useMemo(() => {
     const isStep = graphMode === 'step';
+    
+    // Calculate Matplotlib-style scientific exponent for the Y-axis
+    let psdExponent = 0;
+    if (!isStep) {
+      const activePsd = viewAxis === 'x' ? psdX : psdY;
+      let maxVal = 0;
+      for (let i = 0; i < activePsd.length; i++) {
+        if (activePsd[i] > maxVal) maxVal = activePsd[i] as number;
+      }
+      if (maxVal > 0) {
+        psdExponent = Math.floor(Math.log10(maxVal));
+      }
+    }
+
     return {
       responsive: true,
       maintainAspectRatio: false,
@@ -277,27 +291,25 @@ function App() {
           grid: { color: 'rgba(255, 255, 255, 0.05)' }
         },
         y: {
-          title: { display: true, text: isStep ? 'Position (Step Response)' : 'Power Spectral Density' },
+          title: { 
+              display: true, 
+              text: isStep ? 'Position (Step Response)' : `Power spectral density (1e${psdExponent})` 
+          },
           beginAtZero: true,
           grid: { color: 'rgba(255, 255, 255, 0.05)' },
           ticks: {
             callback: function(value: any) {
               if (isStep) return value.toFixed(2);
-              if (value === 0) return '0';
+              if (value === 0) return '0.0';
               
-              // Format to Klipper's cleaner scientific notation (e.g. 1.5e6 or 2e6 instead of 2.0e+6)
-              let str = value.toExponential(1);
-              str = str.replace('+0', '').replace('+', ''); // remove +0 or + signs
-              if (str.includes('.0e')) {
-                  str = str.replace('.0e', 'e');
-              }
-              return str;
+              // Matplotlib style: value divided by the global axis exponent
+              return (value / Math.pow(10, psdExponent)).toFixed(1);
             }
           }
         }
       }
     };
-  }, [state.maxX, graphMode]);
+  }, [state.maxX, graphMode, viewAxis, psdX, psdY]);
 
   const chartParamsRef = useRef({ predX, predY, viewAxis, psdX, psdY, graphMode });
   chartParamsRef.current = { predX, predY, viewAxis, psdX, psdY, graphMode };
