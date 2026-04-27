@@ -460,8 +460,8 @@ export function scoreShapers(axisFreq: number, rawPsd: Float64Array | number[], 
         let best_shaper_accel = 0;
 
         const testFreq = (f_test: number) => {
-            const shaper = SHAPERS[s](f_test, damping);
-            const { fraction } = estimate_remaining_vibrations(shaper, damping, freqs, rawPsd);
+            const shaper = SHAPERS[s](f_test, DEFAULT_DAMPING_RATIO);
+            const { fraction } = estimate_remaining_vibrations(shaper, DEFAULT_DAMPING_RATIO, freqs, rawPsd);
             const vibrations_pct = fraction * 100.0;
             const max_accel = find_shaper_max_accel(shaper, scv);
 
@@ -494,7 +494,7 @@ export function scoreShapers(axisFreq: number, rawPsd: Float64Array | number[], 
         }
 
         // Calculate final smoothing for the best chosen frequency
-        const final_shaper = SHAPERS[s](best_f, damping);
+        const final_shaper = SHAPERS[s](best_f, DEFAULT_DAMPING_RATIO);
         const smoothing = get_shaper_smoothing(final_shaper, 5000, scv);
 
         results[s] = {
