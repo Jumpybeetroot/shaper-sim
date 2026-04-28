@@ -14,6 +14,12 @@ export interface AppState {
   motorTorque: number;
   motorInertia: number;
   motorCurrent: number;
+  motorRatedCurrent: number;
+  motorResistance: number;
+  motorInductance: number;
+  motorVoltage: number;
+  motorRotorTeeth: number;
+  pulleyTeeth: number;
   enableDynamicSpeed: boolean;
   printSpeed: number;
   twistX: number;
@@ -54,6 +60,12 @@ export const defaultState: AppState = {
   motorTorque: 550,
   motorInertia: 84.5,
   motorCurrent: 100,
+  motorRatedCurrent: 2.5,
+  motorResistance: 1.2,
+  motorInductance: 1.5,
+  motorVoltage: 24,
+  motorRotorTeeth: 50,
+  pulleyTeeth: 20,
   enableDynamicSpeed: false,
   printSpeed: 100,
   twistX: 0,
@@ -67,7 +79,7 @@ export const defaultState: AppState = {
   nozzleOffsetZ: 0,
   nozzleMountedADXL: false,
   toolheadStiffness: 1.0,
-  bearingPreload: 1.0,
+  bearingPreload: 0.85,
   beltTensionDiff: 0,
   gantryRacking: 0,
   externalSway: 0,

@@ -1,6 +1,9 @@
 import React from 'react';
+import { defaultState } from '../types';
 import type { AppState } from '../types';
 import { getBeltTensionN } from '../lib/beltUtils';
+import { getMotorPreset, MOTOR_PRESET_OPTIONS } from '../lib/motorPresets';
+import { STATE_RANGES } from '../lib/stateSanitizer';
 import { CaretDown, FloppyDisk, Sliders, Cube, Trash, ArrowCounterClockwise, Waveform } from '@phosphor-icons/react';
 
 interface SidebarProps {
@@ -12,6 +15,52 @@ interface SidebarProps {
   loadProfile: (name: string) => void;
   deleteProfile: (name: string) => void;
 }
+
+interface RangeControlProps {
+  id: keyof AppState;
+  label: React.ReactNode;
+  value: number;
+  display?: React.ReactNode;
+  min: number;
+  max: number;
+  step: number | string;
+  disabled?: boolean;
+  help?: React.ReactNode;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}
+
+const RangeControl: React.FC<RangeControlProps> = ({
+  id,
+  label,
+  value,
+  display,
+  min,
+  max,
+  step,
+  disabled,
+  help,
+  onChange
+}) => (
+  <div className={`control-group ${disabled ? 'disabled-group' : ''}`}>
+    <label htmlFor={id}>
+      <span>{label}</span>
+      {display !== undefined && <span className="value-display">{display}</span>}
+    </label>
+    <input type="range" id={id} min={min} max={max} step={step} value={value} onChange={onChange} disabled={disabled} />
+    {help && <div className="help-text-block">{help}</div>}
+  </div>
+);
+
+const ScaleLegend: React.FC<{ rows: Array<[string, string]> }> = ({ rows }) => (
+  <div className="scale-grid">
+    {rows.map(([value, label]) => (
+      <React.Fragment key={`${value}-${label}`}>
+        <span className="scale-marker">{value}</span>
+        <span>{label}</span>
+      </React.Fragment>
+    ))}
+  </div>
+);
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
   state, updateState, resetToDefault, profiles, saveProfile, loadProfile, deleteProfile 
@@ -29,30 +78,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
+  const updateCustomMotorNumber = (key: keyof AppState, value: number) => {
+    updateState('motorPreset', 'custom');
+    updateState(key, value);
+  };
+
+  const applyMotorPreset = (id: string) => {
+    updateState('motorPreset', id);
+    const preset = getMotorPreset(id);
+    if (!preset) return;
+
+    updateState('motorTorque', preset.torque);
+    updateState('motorInertia', preset.inertia);
+    updateState('motorRatedCurrent', preset.ratedCurrent);
+    updateState('motorResistance', preset.resistance);
+    updateState('motorInductance', preset.inductance);
+    updateState('motorRotorTeeth', preset.rotorTeeth);
+    updateState('motorCurrent', preset.runCurrent);
+  };
+
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <div className="logo-section" style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'flex-start',
-          gap: '12px',
-          width: '100%', 
-          padding: '10px 8px', 
-          marginBottom: '10px' 
-        }}>
-          <Waveform size={36} weight="duotone" color="#00ffff" style={{ filter: 'drop-shadow(0 0 8px rgba(0, 255, 255, 0.6))' }} />
-          <h2 style={{
-            margin: 0,
-            fontSize: '2rem',
-            fontWeight: 800,
-            fontFamily: '"Inter", "Roboto", sans-serif',
-            background: 'linear-gradient(90deg, #a855f7 0%, #06b6d4 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            filter: 'drop-shadow(0 0 8px rgba(168, 85, 247, 0.4))',
-            letterSpacing: '0.5px'
-          }}>
+        <div className="logo-section">
+          <Waveform size={36} weight="duotone" color="#00ffff" className="logo-icon" />
+          <h2 className="brand-title">
             ShaperSim
           </h2>
         </div>
@@ -86,8 +136,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               placeholder="New Profile Name..." 
             />
             <button 
+              type="button"
               className="btn-icon btn-save" 
               title="Save Profile" 
+              aria-label="Save profile"
               onClick={() => {
                 const name = profileInputRef.current?.value;
                 if (name) {
@@ -100,8 +152,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <FloppyDisk size={16} weight="bold" />
             </button>
             <button 
+              type="button"
               className="btn-icon btn-delete" 
               title="Delete Selected" 
+              aria-label="Delete selected profile"
               onClick={() => {
                 if (selectedProfile && window.confirm(`Delete profile '${selectedProfile}'?`)) {
                   deleteProfile(selectedProfile);
@@ -120,41 +174,46 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <summary>
           <h3><Sliders size={16} weight="duotone" /> Simulation Settings<CaretDown size={16} className="ml-auto ph-caret-down" /></h3>
         </summary>
-        <div className="control-group" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-5px', marginBottom: '10px' }}>
+        <div className="control-actions">
           <button 
+            type="button"
             className="nav-btn nav-btn-clear" 
             onClick={resetToDefault}
-            style={{ fontSize: '0.85rem', padding: '4px 8px' }}
           >
-            <ArrowCounterClockwise size={14} weight="bold" style={{ marginRight: '4px' }} /> Reset All Defaults
+            <ArrowCounterClockwise size={14} weight="bold" /> Reset All Defaults
           </button>
         </div>
-        <div className="control-group">
-          <label htmlFor="dampingRatio">
-            <span>Damping Ratio</span>
-            <span className="value-display">{state.dampingRatio.toFixed(3)}</span>
-          </label>
-          <input type="range" id="dampingRatio" min="0.010" max="0.200" step="0.005" value={state.dampingRatio} onChange={handleChange} />
-          <div className="tension-display" style={{ textAlign: 'left', marginTop: '4px' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.3' }}>
-              <b>Tip:</b> Rigid frames "ring" longer. Use lower values (0.04–0.07) for rigid billet frames, higher (0.10–0.15) for flexible bare/VHB frames.
-            </span>
-          </div>
-        </div>
-        <div className="control-group">
-          <label htmlFor="scv">
-            <span>Square Corner Velocity</span>
-            <span className="value-display">{state.scv.toFixed(1)}</span>
-          </label>
-          <input type="range" id="scv" min="1.0" max="20.0" step="0.5" value={state.scv} onChange={handleChange} />
-        </div>
-        <div className="control-group">
-          <label htmlFor="maxX">
-            <span>Max Frequency (Hz)</span>
-            <span className="value-display">{state.maxX} Hz</span>
-          </label>
-          <input type="range" id="maxX" value={state.maxX || 400} step="10" min="50" max="1000" onChange={handleChange} />
-        </div>
+        <RangeControl
+          id="dampingRatio"
+          label="Damping Ratio"
+          value={state.dampingRatio}
+          display={state.dampingRatio.toFixed(3)}
+          min={STATE_RANGES.dampingRatio.min}
+          max={STATE_RANGES.dampingRatio.max}
+          step="0.005"
+          onChange={handleChange}
+          help={<span className="help-text"><b>Tip:</b> Rigid frames "ring" longer. Use lower values (0.04-0.07) for rigid billet frames, higher (0.10-0.15) for flexible bare/VHB frames.</span>}
+        />
+        <RangeControl
+          id="scv"
+          label="Square Corner Velocity"
+          value={state.scv}
+          display={state.scv.toFixed(1)}
+          min={STATE_RANGES.scv.min}
+          max={STATE_RANGES.scv.max}
+          step="0.5"
+          onChange={handleChange}
+        />
+        <RangeControl
+          id="maxX"
+          label="Max Frequency (Hz)"
+          value={state.maxX || 400}
+          display={`${state.maxX} Hz`}
+          min={STATE_RANGES.maxX.min}
+          max={STATE_RANGES.maxX.max}
+          step="10"
+          onChange={handleChange}
+        />
       </details>
 
       <details className="control-section" open>
@@ -193,7 +252,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <label htmlFor="beltTune">
             <span>Gates Belt Tune (Hz @ 150mm span)</span>
           </label>
-          <input type="range" id="beltTune" min="50" max="400" step="1" value={state.beltTune} onChange={handleChange} />
+          <input type="range" id="beltTune" min={STATE_RANGES.beltTune.min} max={STATE_RANGES.beltTune.max} step="1" value={state.beltTune} onChange={handleChange} />
           <div className="tension-display">
             <span>{state.beltTune} Hz (~{getBeltTensionN(state.beltType, state.beltTune).toFixed(1)} N)</span>
           </div>
@@ -203,20 +262,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span>Frame Stiffness</span>
             <span className="value-display">{state.frameStiffness.toFixed(1)}</span>
           </label>
-          <input type="range" id="frameStiffness" min="0.5" max="10.0" step="0.1" value={state.frameStiffness} onChange={handleChange} />
-          <div style={{ marginTop: '6px', display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: '10px', rowGap: '1px', fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
-            <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>0.5</span>  <span>Acrylic / Poor</span>
-            <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>1.0</span>  <span>Bare 2020</span>
-            <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>4.0</span>  <span>Bare 4040</span>
-            <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>5.0</span>  <span>2020 + 3mm Alu panel</span>
-            <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>6.5</span>  <span>2020 + 5mm Alu panel</span>
-            <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>7.5</span>  <span>4040 + 3mm Alu panel</span>
-            <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>9.0</span>  <span>4040 + 5mm Alu panel</span>
-            <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>10.0</span> <span>CNC Billet / Cast Iron</span>
-          </div>
-          <div style={{ marginTop: '6px', fontSize: '10px', color: 'var(--text-secondary)', lineHeight: '1.3', opacity: 0.8 }}>
+          <input type="range" id="frameStiffness" min={STATE_RANGES.frameStiffness.min} max={STATE_RANGES.frameStiffness.max} step="0.1" value={state.frameStiffness} onChange={handleChange} />
+          <ScaleLegend rows={[
+            ['0.5', 'Acrylic / Poor'],
+            ['1.0', 'Bare 2020'],
+            ['4.0', 'Bare 4040'],
+            ['5.0', '2020 + 3mm Alu panel'],
+            ['6.5', '2020 + 5mm Alu panel'],
+            ['7.5', '4040 + 3mm Alu panel'],
+            ['9.0', '4040 + 5mm Alu panel'],
+            ['10.0', 'CNC Billet / Cast Iron']
+          ]} />
+          <div className="subtle-note">
             <em>* Panels must be continuously bolted/bonded to extrusions — flimsy printed clips don't add stiffness.</em><br />
-            <em style={{ display: 'inline-block', marginTop: '3px' }}>* ACM/PC composite panels have less than half the shear rigidity of solid aluminum.</em>
+            <em className="note-em">* ACM/PC composite panels have less than half the shear rigidity of solid aluminum.</em>
           </div>
         </div>
 
@@ -225,51 +284,50 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="sub-category-content">
             <div className="control-group">
               <label htmlFor="motorPreset">Motor Preset</label>
-              <select id="motorPreset" value={state.motorPreset} onChange={(e) => {
-                const val = e.target.value;
-                updateState('motorPreset', val);
-                const motorPresets: Record<string, {torque: number, inertia: number}> = {
-                    'ldo-48': { torque: 550, inertia: 84.5 },
-                    'ldo-40': { torque: 450, inertia: 54.0 },
-                    'ldo-kraken': { torque: 800, inertia: 138.0 },
-                    'moons': { torque: 550, inertia: 82.0 },
-                    'stepperonline': { torque: 590, inertia: 82.0 },
-                    'excit3d-max': { torque: 560, inertia: 82.0 }
-                };
-                if (val !== 'custom' && motorPresets[val]) {
-                    updateState('motorTorque', motorPresets[val].torque);
-                    updateState('motorInertia', motorPresets[val].inertia);
-                }
-              }}>
-                <option value="custom">Custom...</option>
-                <option value="ldo-48">LDO-42STH48-2504AC</option>
-                <option value="ldo-40">LDO-42STH40-1684AC</option>
-                <option value="ldo-kraken">LDO-42STH60-3004HA (Kraken)</option>
-                <option value="moons">Moons MS17HD6P4200</option>
-                <option value="stepperonline">StepperOnline 17HS19</option>
-                <option value="excit3d-max">Excit3D MaxMotor</option>
+              <select id="motorPreset" value={state.motorPreset} onChange={(e) => applyMotorPreset(e.target.value)}>
+                {MOTOR_PRESET_OPTIONS.map(option => (
+                  <option key={option.id} value={option.id}>{option.label}</option>
+                ))}
               </select>
             </div>
             <div className="control-group">
               <label htmlFor="motorTorque">Rated Holding Torque (mNm)</label>
-              <input type="number" id="motorTorque" value={state.motorTorque} step="10" onChange={(e) => {
-                updateState('motorPreset', 'custom');
-                updateState('motorTorque', parseFloat(e.target.value));
-              }} />
+              <input type="number" id="motorTorque" value={state.motorTorque} min={STATE_RANGES.motorTorque.min} max={STATE_RANGES.motorTorque.max} step="10" onChange={(e) => updateCustomMotorNumber('motorTorque', parseFloat(e.target.value))} />
             </div>
             <div className="control-group">
               <label htmlFor="motorInertia">Rotor Inertia (g·cm²)</label>
-              <input type="number" id="motorInertia" value={state.motorInertia} step="0.1" onChange={(e) => {
-                updateState('motorPreset', 'custom');
-                updateState('motorInertia', parseFloat(e.target.value));
-              }} />
+              <input type="number" id="motorInertia" value={state.motorInertia} min={STATE_RANGES.motorInertia.min} max={STATE_RANGES.motorInertia.max} step="0.1" onChange={(e) => updateCustomMotorNumber('motorInertia', parseFloat(e.target.value))} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="motorRatedCurrent">Rated Current (A/phase)</label>
+              <input type="number" id="motorRatedCurrent" value={state.motorRatedCurrent} min={STATE_RANGES.motorRatedCurrent.min} max={STATE_RANGES.motorRatedCurrent.max} step="0.05" onChange={(e) => updateCustomMotorNumber('motorRatedCurrent', parseFloat(e.target.value))} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="motorResistance">Phase Resistance (ohms)</label>
+              <input type="number" id="motorResistance" value={state.motorResistance} min={STATE_RANGES.motorResistance.min} max={STATE_RANGES.motorResistance.max} step="0.05" onChange={(e) => updateCustomMotorNumber('motorResistance', parseFloat(e.target.value))} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="motorInductance">Phase Inductance (mH)</label>
+              <input type="number" id="motorInductance" value={state.motorInductance} min={STATE_RANGES.motorInductance.min} max={STATE_RANGES.motorInductance.max} step="0.05" onChange={(e) => updateCustomMotorNumber('motorInductance', parseFloat(e.target.value))} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="motorRotorTeeth">Rotor Teeth</label>
+              <input type="number" id="motorRotorTeeth" value={state.motorRotorTeeth} min={STATE_RANGES.motorRotorTeeth.min} max={STATE_RANGES.motorRotorTeeth.max} step="1" onChange={(e) => updateCustomMotorNumber('motorRotorTeeth', parseFloat(e.target.value))} />
             </div>
             <div className="control-group">
               <label htmlFor="motorCurrent">
                 <span>Run Current</span>
                 <span className="value-display">{state.motorCurrent}%</span>
               </label>
-              <input type="range" id="motorCurrent" min="10" max="150" step="1" value={state.motorCurrent} onChange={handleChange} />
+              <input type="range" id="motorCurrent" min={STATE_RANGES.motorCurrent.min} max={STATE_RANGES.motorCurrent.max} step="1" value={state.motorCurrent} onChange={handleChange} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="motorVoltage">Supply Voltage (V)</label>
+              <input type="number" id="motorVoltage" value={state.motorVoltage} min={STATE_RANGES.motorVoltage.min} max={STATE_RANGES.motorVoltage.max} step="1" onChange={handleChange} />
+            </div>
+            <div className="control-group">
+              <label htmlFor="pulleyTeeth">GT2 Pulley Teeth</label>
+              <input type="number" id="pulleyTeeth" value={state.pulleyTeeth} min={STATE_RANGES.pulleyTeeth.min} max={STATE_RANGES.pulleyTeeth.max} step="1" onChange={handleChange} />
             </div>
           </div>
         </details>
@@ -281,105 +339,91 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <input type="checkbox" id="enableDynamicSpeed" className="checkbox-input" checked={state.enableDynamicSpeed} onChange={handleChange} />
               <label htmlFor="enableDynamicSpeed" className="checkbox-label">Enable Speed Simulation</label>
             </div>
-            <div className={`control-group ${!state.enableDynamicSpeed ? 'disabled-group' : ''}`}>
-              <label htmlFor="printSpeed">
-                <span>Print Speed (mm/s)</span>
-                <span className="value-display">{state.printSpeed} mm/s</span>
-              </label>
-              <input type="range" id="printSpeed" min="0" max="1000" step="10" value={state.printSpeed} onChange={handleChange} disabled={!state.enableDynamicSpeed} />
-              <div className="tension-display" style={{ textAlign: 'left', marginTop: '6px' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.3' }}>
-                  <b>Tip:</b> Simulates torque drop-off (shifts resonance peaks lower) and GT2 belt tooth meshing at <b>{(state.printSpeed / 2).toFixed(0)} Hz</b>.
-                </span>
-              </div>
+            <div className="help-text-block">
+              <span className="help-text">Before using speed simulation, verify the motor stats above, including supply voltage, pulley teeth, rated current, resistance, inductance, and rotor teeth.</span>
             </div>
+            <RangeControl
+              id="printSpeed"
+              label="Print Speed (mm/s)"
+              value={state.printSpeed}
+              display={`${state.printSpeed} mm/s`}
+              min={STATE_RANGES.printSpeed.min}
+              max={STATE_RANGES.printSpeed.max}
+              step="10"
+              disabled={!state.enableDynamicSpeed}
+              onChange={handleChange}
+              help={<span className="help-text"><b>Tip:</b> Simulates torque drop-off (shifts resonance peaks lower) and GT2 belt tooth meshing at <b>{(state.printSpeed / 2).toFixed(0)} Hz</b>.</span>}
+            />
             <div className="control-group">
-              <div className="tension-display" style={{ textAlign: 'left', marginBottom: '8px' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.3', display: 'inline-block' }}>
+              <div className="help-panel">
+                <div className="help-text">
                   <b>Tip:</b> Measure all offsets (COM, ADXL, Nozzle) as the physical distance (in mm) from the <b>linear rail carriage center</b>.<br/><br/>
-                  <b style={{ opacity: 0.8 }}>Directions (looking from front):</b><br/>
-                  <span style={{ opacity: 0.8 }}>• <b>X:</b> (-) Left / (+) Right</span><br/>
-                  <span style={{ opacity: 0.8 }}>• <b>Y:</b> (-) Front / (+) Back</span><br/>
-                  <span style={{ opacity: 0.8 }}>• <b>Z:</b> (-) Down / (+) Up</span><br/><br/>
-                  <b style={{ color: '#ffb84d', opacity: 0.9 }}>⚠ Important:</b><br/>
-                  <span style={{ opacity: 0.8 }}>Do not use any offset unless you are going to set them all correctly.</span>
+                  <b className="muted-strong">Directions (looking from front):</b><br/>
+                  <span className="muted-text">• <b>X:</b> (-) Left / (+) Right</span><br/>
+                  <span className="muted-text">• <b>Y:</b> (-) Front / (+) Back</span><br/>
+                  <span className="muted-text">• <b>Z:</b> (-) Down / (+) Up</span><br/><br/>
+                  <b className="warning-text">⚠ Important:</b><br/>
+                  <span className="muted-text">Do not use any offset unless you are going to set them all correctly.</span>
                   
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                    <button className="export-btn" style={{ padding: '4px 8px', fontSize: '11px', flex: 1 }} onClick={() => {
+                  <div className="preset-actions">
+                    <button type="button" className="export-btn compact-action" onClick={() => {
                       updateState('twistX', 0); updateState('twistY', 0); updateState('twistZ', 0);
                       updateState('adxlOffsetX', 0); updateState('adxlOffsetY', 0); updateState('adxlOffsetZ', 0);
                       updateState('nozzleOffsetX', 0); updateState('nozzleOffsetY', 0); updateState('nozzleOffsetZ', 0);
                       updateState('nozzleMountedADXL', false);
+                      updateState('toolheadStiffness', defaultState.toolheadStiffness);
+                      updateState('bearingPreload', defaultState.bearingPreload);
                     }}>Reset All</button>
-                    <button className="export-btn" style={{ padding: '4px 8px', fontSize: '11px', flex: 1 }} onClick={() => {
+                    <button type="button" className="export-btn compact-action" onClick={() => {
                       updateState('twistX', 0); updateState('twistY', -20); updateState('twistZ', -10);
                       updateState('adxlOffsetX', 0); updateState('adxlOffsetY', -45); updateState('adxlOffsetZ', 15);
                       updateState('nozzleOffsetX', 0); updateState('nozzleOffsetY', -35); updateState('nozzleOffsetZ', -40);
+                      updateState('toolheadStiffness', 0.65);
                       updateState('nozzleMountedADXL', false);
                     }}>Stealthburner</button>
                   </div>
-                </span>
+                </div>
               </div>
-              <label htmlFor="twistX"><span>X COM Offset (mm) <span style={{opacity:0.55, fontSize:'10px'}}>(affects Y-axis graph)</span></span><span className="value-display">{state.twistX} mm</span></label>
-              <input type="range" id="twistX" min="-100" max="100" step="1" value={state.twistX} onChange={handleChange} />
             </div>
-            <div className="control-group">
-              <label htmlFor="twistY"><span>Y COM Offset (mm) <span style={{opacity:0.55, fontSize:'10px'}}>(affects X-axis graph)</span></span><span className="value-display">{state.twistY} mm</span></label>
-              <input type="range" id="twistY" min="-100" max="100" step="1" value={state.twistY} onChange={handleChange} />
-            </div>
-            <div className="control-group">
-              <label htmlFor="twistZ"><span>Z COM Offset (mm) <span style={{opacity:0.55, fontSize:'10px'}}>(affects both axes)</span></span><span className="value-display">{state.twistZ} mm</span></label>
-              <input type="range" id="twistZ" min="-100" max="100" step="1" value={state.twistZ} onChange={handleChange} />
-            </div>
-            <div className="control-group checkbox-group" style={{ marginTop: '10px' }}>
+            <RangeControl id="twistX" label={<>X COM Offset (mm) <span className="label-note">(affects Y-axis graph)</span></>} value={state.twistX} display={`${state.twistX} mm`} min={STATE_RANGES.twistX.min} max={STATE_RANGES.twistX.max} step="1" onChange={handleChange} />
+            <RangeControl id="twistY" label={<>Y COM Offset (mm) <span className="label-note">(affects X-axis graph)</span></>} value={state.twistY} display={`${state.twistY} mm`} min={STATE_RANGES.twistY.min} max={STATE_RANGES.twistY.max} step="1" onChange={handleChange} />
+            <RangeControl id="twistZ" label={<>Z COM Offset (mm) <span className="label-note">(affects both axes)</span></>} value={state.twistZ} display={`${state.twistZ} mm`} min={STATE_RANGES.twistZ.min} max={STATE_RANGES.twistZ.max} step="1" onChange={handleChange} />
+            <div className="control-group checkbox-group control-group-offset">
               <input type="checkbox" id="nozzleMountedADXL" className="checkbox-input" checked={state.nozzleMountedADXL} onChange={handleChange} />
               <label htmlFor="nozzleMountedADXL" className="checkbox-label">Nozzle-Mounted ADXL</label>
             </div>
             {!state.nozzleMountedADXL && (
               <>
-                <div className="control-group">
-                  <label htmlFor="adxlOffsetX"><span>X ADXL Offset (mm)</span><span className="value-display">{state.adxlOffsetX} mm</span></label>
-                  <input type="range" id="adxlOffsetX" min="-100" max="100" step="1" value={state.adxlOffsetX} onChange={handleChange} />
-                </div>
-                <div className="control-group">
-                  <label htmlFor="adxlOffsetY"><span>Y ADXL Offset (mm)</span><span className="value-display">{state.adxlOffsetY} mm</span></label>
-                  <input type="range" id="adxlOffsetY" min="-100" max="100" step="1" value={state.adxlOffsetY} onChange={handleChange} />
-                </div>
-                <div className="control-group">
-                  <label htmlFor="adxlOffsetZ"><span>Z ADXL Offset (mm)</span><span className="value-display">{state.adxlOffsetZ} mm</span></label>
-                  <input type="range" id="adxlOffsetZ" min="-100" max="100" step="1" value={state.adxlOffsetZ} onChange={handleChange} />
-                </div>
+                <RangeControl id="adxlOffsetX" label="X ADXL Offset (mm)" value={state.adxlOffsetX} display={`${state.adxlOffsetX} mm`} min={STATE_RANGES.adxlOffsetX.min} max={STATE_RANGES.adxlOffsetX.max} step="1" onChange={handleChange} />
+                <RangeControl id="adxlOffsetY" label="Y ADXL Offset (mm)" value={state.adxlOffsetY} display={`${state.adxlOffsetY} mm`} min={STATE_RANGES.adxlOffsetY.min} max={STATE_RANGES.adxlOffsetY.max} step="1" onChange={handleChange} />
+                <RangeControl id="adxlOffsetZ" label="Z ADXL Offset (mm)" value={state.adxlOffsetZ} display={`${state.adxlOffsetZ} mm`} min={STATE_RANGES.adxlOffsetZ.min} max={STATE_RANGES.adxlOffsetZ.max} step="1" onChange={handleChange} />
               </>
             )}
-            <div className="control-group" style={{ marginTop: '10px' }}>
-              <label htmlFor="nozzleOffsetX"><span>X Nozzle Offset (mm)</span><span className="value-display">{state.nozzleOffsetX} mm</span></label>
-              <input type="range" id="nozzleOffsetX" min="-100" max="100" step="1" value={state.nozzleOffsetX} onChange={handleChange} />
-            </div>
-            <div className="control-group">
-              <label htmlFor="nozzleOffsetY"><span>Y Nozzle Offset (mm)</span><span className="value-display">{state.nozzleOffsetY} mm</span></label>
-              <input type="range" id="nozzleOffsetY" min="-100" max="100" step="1" value={state.nozzleOffsetY} onChange={handleChange} />
-            </div>
-            <div className="control-group">
-              <label htmlFor="nozzleOffsetZ"><span>Z Nozzle Offset (mm)</span><span className="value-display">{state.nozzleOffsetZ} mm</span></label>
-              <input type="range" id="nozzleOffsetZ" min="-100" max="100" step="1" value={state.nozzleOffsetZ} onChange={handleChange} />
-            </div>
-            <div className="control-group" style={{ marginTop: '10px' }}>
+            <RangeControl id="nozzleOffsetX" label="X Nozzle Offset (mm)" value={state.nozzleOffsetX} display={`${state.nozzleOffsetX} mm`} min={STATE_RANGES.nozzleOffsetX.min} max={STATE_RANGES.nozzleOffsetX.max} step="1" onChange={handleChange} />
+            <RangeControl id="nozzleOffsetY" label="Y Nozzle Offset (mm)" value={state.nozzleOffsetY} display={`${state.nozzleOffsetY} mm`} min={STATE_RANGES.nozzleOffsetY.min} max={STATE_RANGES.nozzleOffsetY.max} step="1" onChange={handleChange} />
+            <RangeControl id="nozzleOffsetZ" label="Z Nozzle Offset (mm)" value={state.nozzleOffsetZ} display={`${state.nozzleOffsetZ} mm`} min={STATE_RANGES.nozzleOffsetZ.min} max={STATE_RANGES.nozzleOffsetZ.max} step="1" onChange={handleChange} />
+            <div className="control-group control-group-offset">
               <label htmlFor="toolheadStiffness"><span>Toolhead Material Stiffness</span><span className="value-display">{state.toolheadStiffness.toFixed(1)}x</span></label>
-              <input type="range" id="toolheadStiffness" min="1.0" max="3.0" step="0.1" value={state.toolheadStiffness} onChange={handleChange} />
-              <div style={{ marginTop: '6px', display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: '10px', rowGap: '1px', fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
-                <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>1.0</span>  <span>Thick ABS/ASA (Standard)</span>
-                <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>1.5</span>  <span>Topo. Optimized Plastic / CF</span>
-                <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>2.0</span>  <span>Topo. CF / Machined Alu / Basic SLM</span>
-                <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>2.5</span>  <span>Topology Optimized CNC</span>
-                <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>3.0</span>  <span>Topology Optimized SLM</span>
+              <input type="range" id="toolheadStiffness" min={STATE_RANGES.toolheadStiffness.min} max={STATE_RANGES.toolheadStiffness.max} step="0.05" value={state.toolheadStiffness} onChange={handleChange} />
+              <ScaleLegend rows={[
+                ['0.5', 'Flexible printed stack / weak ducts'],
+                ['0.7', 'StealthBurner-style ABS assembly'],
+                ['1.0', 'Stiff printed baseline'],
+                ['1.5', 'Topo. Optimized Plastic / CF'],
+                ['2.0', 'Topo. CF / Machined Alu / Basic SLM'],
+                ['2.5', 'Topology Optimized CNC'],
+                ['3.0', 'Topology Optimized SLM']
+              ]} />
+              <div className="subtle-note">
+                <em>* These stiffness values are provisional model estimates, not measured material facts. Use them for relative what-if comparisons only.</em>
               </div>
             </div>
-            <div className="control-group" style={{ marginTop: '10px' }}>
+            <div className="control-group control-group-offset">
               <label htmlFor="bearingPreload">X-Rail Bearing Preload</label>
               <select id="bearingPreload" value={state.bearingPreload} onChange={(e) => updateState('bearingPreload', parseFloat(e.target.value))}>
                 <option value="0.7">MGN9 Z0 (Light / Micro-slop)</option>
-                <option value="0.85">MGN12 Z0 (Light Preload)</option>
-                <option value="1">MGN12 Z1 (Medium Preload - Standard)</option>
+                <option value="0.85">MGN12 Z0 (Light Preload - Default)</option>
+                <option value="1">MGN12 Z1 (Medium Preload)</option>
                 <option value="1.15">MGN12 Z2 (Heavy Preload)</option>
                 <option value="1.2">Dual MGN9 / Wide Carriage</option>
               </select>
@@ -396,44 +440,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <details className="sub-category">
           <summary>Drive System & Frame</summary>
           <div className="sub-category-content">
-            <div className="control-group">
-              <label htmlFor="beltTensionDiff"><span>Unequal Belt Tension (Split Peak)</span><span className="value-display">{state.beltTensionDiff}%</span></label>
-              <input type="range" id="beltTensionDiff" min="0" max="50" step="5" value={state.beltTensionDiff} onChange={handleChange} />
-            </div>
-            <div className="control-group">
-              <label htmlFor="gantryRacking"><span>Gantry Racking (Y only)</span><span className="value-display">{state.gantryRacking}%</span></label>
-              <input type="range" id="gantryRacking" min="0" max="100" step="5" value={state.gantryRacking} onChange={handleChange} />
-            </div>
+            <RangeControl id="beltTensionDiff" label="Unequal Belt Tension (Split Peak)" value={state.beltTensionDiff} display={`${state.beltTensionDiff}%`} min={STATE_RANGES.beltTensionDiff.min} max={STATE_RANGES.beltTensionDiff.max} step="5" onChange={handleChange} />
+            <RangeControl id="gantryRacking" label="Gantry Racking (Y only)" value={state.gantryRacking} display={`${state.gantryRacking}%`} min={STATE_RANGES.gantryRacking.min} max={STATE_RANGES.gantryRacking.max} step="5" onChange={handleChange} />
           </div>
         </details>
 
         <details className="sub-category">
           <summary>External & Umbilical</summary>
           <div className="sub-category-content">
-            <div className="control-group">
-              <label htmlFor="externalSway"><span>External Sway</span><span className="value-display">{state.externalSway}%</span></label>
-              <input type="range" id="externalSway" min="0" max="100" step="5" value={state.externalSway} onChange={handleChange} />
-            </div>
-            <div className="control-group">
-              <label htmlFor="externalSwayFreq"><span>Sway Frequency (Hz)</span><span className="value-display">{state.externalSwayFreq} Hz</span></label>
-              <input type="range" id="externalSwayFreq" min="5" max="35" step="1" value={state.externalSwayFreq} onChange={handleChange} />
-            </div>
-            <div className="control-group">
-              <label htmlFor="squishyFeet"><span>Squishy Materials</span><span className="value-display">{state.squishyFeet}%</span></label>
-              <input type="range" id="squishyFeet" min="0" max="100" step="5" value={state.squishyFeet} onChange={handleChange} />
-            </div>
-            <div className="control-group">
-              <label htmlFor="hoseDrag"><span>Hose Drag Amplitude</span><span className="value-display">{state.hoseDrag}%</span></label>
-              <input type="range" id="hoseDrag" min="0" max="100" step="5" value={state.hoseDrag} onChange={handleChange} />
-            </div>
-            <div className="control-group">
-              <label htmlFor="hoseDragFreq"><span>Hose Drag Freq (Hz)</span><span className="value-display">{state.hoseDragFreq} Hz</span></label>
-              <input type="range" id="hoseDragFreq" min="5" max="35" step="1" value={state.hoseDragFreq} onChange={handleChange} />
-            </div>
-            <div className="control-group">
-              <label htmlFor="hoseSquishy"><span>Hose Damping</span><span className="value-display">{state.hoseSquishy}%</span></label>
-              <input type="range" id="hoseSquishy" min="0" max="100" step="5" value={state.hoseSquishy} onChange={handleChange} />
-            </div>
+            <RangeControl id="externalSway" label="External Sway" value={state.externalSway} display={`${state.externalSway}%`} min={STATE_RANGES.externalSway.min} max={STATE_RANGES.externalSway.max} step="5" onChange={handleChange} />
+            <RangeControl id="externalSwayFreq" label="Sway Frequency (Hz)" value={state.externalSwayFreq} display={`${state.externalSwayFreq} Hz`} min={STATE_RANGES.externalSwayFreq.min} max={STATE_RANGES.externalSwayFreq.max} step="1" onChange={handleChange} />
+            <RangeControl id="squishyFeet" label="Squishy Materials" value={state.squishyFeet} display={`${state.squishyFeet}%`} min={STATE_RANGES.squishyFeet.min} max={STATE_RANGES.squishyFeet.max} step="5" onChange={handleChange} />
+            <RangeControl id="hoseDrag" label="Hose Drag Amplitude" value={state.hoseDrag} display={`${state.hoseDrag}%`} min={STATE_RANGES.hoseDrag.min} max={STATE_RANGES.hoseDrag.max} step="5" onChange={handleChange} />
+            <RangeControl id="hoseDragFreq" label="Hose Drag Freq (Hz)" value={state.hoseDragFreq} display={`${state.hoseDragFreq} Hz`} min={STATE_RANGES.hoseDragFreq.min} max={STATE_RANGES.hoseDragFreq.max} step="1" onChange={handleChange} />
+            <RangeControl id="hoseSquishy" label="Hose Damping" value={state.hoseSquishy} display={`${state.hoseSquishy}%`} min={STATE_RANGES.hoseSquishy.min} max={STATE_RANGES.hoseSquishy.max} step="5" onChange={handleChange} />
           </div>
         </details>
       </details>

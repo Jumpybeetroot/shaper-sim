@@ -5,19 +5,25 @@ import { DraggableOverlay } from './components/DraggableOverlay';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { defaultState } from './types';
 import type { AppState } from './types';
+import { parseKlipperCsv } from './lib/csvOverlay';
+import type { CsvOverlay } from './lib/csvOverlay';
 import { SHAPERS, DEFAULT_DAMPING_RATIO, estimate_shaper, generate_step_responses } from './lib/shaperLogic';
 import type { ShaperScore, ShaperScoringMode } from './lib/shaperLogic';
+import { sanitizeAppState, sanitizeProfiles } from './lib/stateSanitizer';
 import { Info, WarningCircle, Camera, XCircle, XCircleIcon, FileArrowUpIcon } from '@phosphor-icons/react';
 import type { ChartData, ChartOptions, Plugin, TooltipItem } from 'chart.js';
 
 type GraphMode = 'psd' | 'step';
 type ViewAxis = 'x' | 'y';
+type ShaperScoreTarget = 'adxl' | 'nozzle';
 type ChartPoint = { x: number; y: number };
 type LineChartData = ChartData<'line', ChartPoint[], unknown>;
 type ShaperScoreSet = { results: Record<string, ShaperScore>; best_shaper: string };
 type WorkerResult = {
   predX: number;
   predY: number;
+  staticPredX: number;
+  staticPredY: number;
   compX: { belt: number; frame: number; motor: number };
   compY: { belt: number; frame: number; motor: number };
   freqs: Float64Array;
@@ -25,9 +31,14 @@ type WorkerResult = {
   psdY: Float64Array;
   psdX_nozzle: Float64Array;
   psdY_nozzle: Float64Array;
+  psdX_nozzle_structural: Float64Array;
+  psdY_nozzle_structural: Float64Array;
   scoreX: ShaperScoreSet;
   scoreY: ShaperScoreSet;
   scoringMode: ShaperScoringMode;
+  nozzleScoreX?: ShaperScoreSet;
+  nozzleScoreY?: ShaperScoreSet;
+  nozzleScoringMode?: ShaperScoringMode;
 };
 type ChartPluginParams = {
   predX: number;
@@ -43,6 +54,8 @@ type WorkerMessage =
       requestId: number;
       predX: number;
       predY: number;
+      staticPredX: number;
+      staticPredY: number;
       compX: { belt: number; frame: number; motor: number };
       compY: { belt: number; frame: number; motor: number };
       freqs: Float64Array;
@@ -50,16 +63,22 @@ type WorkerMessage =
       psdY: Float64Array;
       psdX_nozzle: Float64Array;
       psdY_nozzle: Float64Array;
+      psdX_nozzle_structural: Float64Array;
+      psdY_nozzle_structural: Float64Array;
     }
   | {
       type: 'SHAPERS';
       requestId: number;
       scoringMode: ShaperScoringMode;
+      scoreTarget: ShaperScoreTarget;
+      psdRequestId: number;
       scoreX: ShaperScoreSet;
       scoreY: ShaperScoreSet;
     };
+type ShaperWorkerMessage = Extract<WorkerMessage, { type: 'SHAPERS' }>;
 
 const MAX_CHART_POINTS = 1200;
+const emptyScoreSet = (): ShaperScoreSet => ({ results: {}, best_shaper: '' });
 
 const colors: Record<string, string> = {
   zv: '#ff3366',
@@ -77,18 +96,34 @@ const shaperNames: Record<string, string> = {
   '3hump_ei': '3HUMP_EI'
 };
 
-// --- CSV overlay support ---
+const CSV_COLORS = ['#ff9900', '#ff44aa', '#44ffcc', '#bb44ff', '#ffff44', '#44aaff'];
 
-interface CsvOverlay {
-  id: string;
-  label: string;
-  // auto-detected from filename: _x_ → x axis only, _y_ → y axis only
-  axis: 'x' | 'y' | 'both';
-  freqs: Float64Array;
-  psd: Float64Array;
+function formatAccelLimit(maxAccel: number): string {
+  return `${(Math.round(maxAccel / 100.0) * 100.0).toLocaleString()} mm/s²`;
 }
 
-const CSV_COLORS = ['#ff9900', '#ff44aa', '#44ffcc', '#bb44ff', '#ffff44', '#44aaff'];
+function renderShaperDetail(scoreSet: ShaperScoreSet) {
+  const shaper = scoreSet.best_shaper;
+  const result = shaper ? scoreSet.results[shaper] : undefined;
+
+  if (!result) {
+    return <div className="shaper-detail">Calculating...</div>;
+  }
+
+  return (
+    <div className="shaper-detail shaper-detail-card">
+      <div className="shaper-detail-primary">
+        {shaperNames[shaper] ?? shaper.toUpperCase()} @ {result.freq.toFixed(1)} Hz
+      </div>
+      <div className="shaper-detail-metrics">
+        <span className="shaper-metric-label">Smooth limit</span>
+        <span className="shaper-metric-value">{formatAccelLimit(result.max_accel)}</span>
+        <span className="shaper-metric-label">Residual vib</span>
+        <span className="shaper-metric-value">{result.vibrations.toFixed(1)}%</span>
+      </div>
+    </div>
+  );
+}
 
 function toChartPoints(freqs: Float64Array, values: ArrayLike<number>, maxPoints = MAX_CHART_POINTS): ChartPoint[] {
   if (freqs.length <= maxPoints || maxPoints < 6) {
@@ -117,55 +152,53 @@ function toChartPoints(freqs: Float64Array, values: ArrayLike<number>, maxPoints
   return points;
 }
 
-function parseKlipperCsv(text: string, filename: string): CsvOverlay | null {
-  // Strip comment lines (Klipper raw resonance files start lines with #)
-  const lines = text.trim().split(/\r?\n/).filter(l => l && !l.startsWith('#'));
-  if (lines.length < 2) return null;
-
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-  const freqIdx = headers.indexOf('freq');
-  if (freqIdx === -1) return null;
-
-  // Prefer psd_xyz (combined), then psd_x, then any psd_ column
-  let psdIdx = headers.indexOf('psd_xyz');
-  if (psdIdx === -1) psdIdx = headers.indexOf('psd_x');
-  if (psdIdx === -1) psdIdx = headers.findIndex(h => h.startsWith('psd'));
-  if (psdIdx === -1) return null;
-
-  const freqs: number[] = [];
-  const psd: number[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const parts = lines[i].split(',');
-    const f = parseFloat(parts[freqIdx]);
-    const p = parseFloat(parts[psdIdx]);
-    if (isFinite(f) && isFinite(p) && f > 0) {
-      freqs.push(f);
-      psd.push(p);
+function peakInfo(freqs: Float64Array, values: Float64Array): { freq: number; value: number } {
+  let peakValue = 0;
+  let peakFreq = 0;
+  for (let i = 0; i < values.length; i++) {
+    if (values[i] > peakValue) {
+      peakValue = values[i];
+      peakFreq = freqs[i] ?? 0;
     }
   }
-  if (freqs.length === 0) return null;
+  return { freq: peakFreq, value: peakValue };
+}
 
-  const lower = filename.toLowerCase();
-  const axis: 'x' | 'y' | 'both' =
-    /_x[_.]/.test(lower) ? 'x' :
-    /_y[_.]/.test(lower) ? 'y' : 'both';
+function secondaryDeltaInfo(
+  freqs: Float64Array,
+  baseValues: Float64Array,
+  measuredValues: Float64Array,
+  centerFreq: number
+): { freq: number; ratio: number } {
+  let basePeak = 0;
+  for (let i = 0; i < baseValues.length; i++) {
+    if (baseValues[i] > basePeak) basePeak = baseValues[i];
+  }
+  if (basePeak <= 0 || centerFreq <= 0) return { freq: 0, ratio: 0 };
 
-  return {
-    id: `${filename}_${Date.now()}`,
-    label: filename.replace(/\.csv$/i, ''),
-    axis,
-    freqs: new Float64Array(freqs),
-    psd: new Float64Array(psd),
-  };
+  let maxDelta = 0;
+  let maxDeltaFreq = 0;
+  const low = centerFreq * 1.08;
+  const high = centerFreq * 1.55;
+  for (let i = 0; i < measuredValues.length; i++) {
+    const f = freqs[i];
+    if (f < low || f > high) continue;
+    const delta = measuredValues[i] - baseValues[i];
+    if (delta > maxDelta) {
+      maxDelta = delta;
+      maxDeltaFreq = f;
+    }
+  }
+  return { freq: maxDeltaFreq, ratio: maxDelta / basePeak };
 }
 
 function loadSavedState(): AppState {
   const saved = localStorage.getItem('shaperSim_state');
-  if (!saved) return defaultState;
+  if (!saved) return sanitizeAppState(defaultState);
   try {
-    return { ...defaultState, ...JSON.parse(saved) };
+    return sanitizeAppState(JSON.parse(saved));
   } catch {
-    return defaultState;
+    return sanitizeAppState(defaultState);
   }
 }
 
@@ -173,7 +206,7 @@ function loadSavedProfiles(): Record<string, AppState> {
   const saved = localStorage.getItem('shaperSim_profiles');
   if (!saved) return {};
   try {
-    return JSON.parse(saved);
+    return sanitizeProfiles(JSON.parse(saved));
   } catch {
     return {};
   }
@@ -184,7 +217,9 @@ function App() {
   const [graphMode, setGraphMode] = useState<GraphMode>('psd');
   const [viewAxis, setViewAxis] = useState<ViewAxis>('x');
   const [selectedShaper, setSelectedShaper] = useState<string>('recommended');
+  const [recommendationSource, setRecommendationSource] = useState<ShaperScoreTarget>('adxl');
   const [exactPending, setExactPending] = useState(false);
+  const [nozzlePending, setNozzlePending] = useState(false);
   
   const [snapshotData, setSnapshotData] = useState<{psdX: Float64Array, psdY: Float64Array, freqs: Float64Array} | null>(null);
   const [csvOverlays, setCsvOverlays] = useState<CsvOverlay[]>([]);
@@ -222,7 +257,7 @@ function App() {
 
   const saveProfile = useCallback((name: string) => {
     setProfiles(prev => {
-        const newProfiles = { ...prev, [name]: state };
+        const newProfiles = sanitizeProfiles({ ...prev, [name]: state });
         localStorage.setItem('shaperSim_profiles', JSON.stringify(newProfiles));
         return newProfiles;
     });
@@ -239,21 +274,17 @@ function App() {
 
   const loadProfile = useCallback((name: string) => {
     if (profiles[name]) {
-        setState(profiles[name]);
+        setState(sanitizeAppState(profiles[name]));
     }
   }, [profiles]);
 
   const updateState = useCallback((key: keyof AppState, value: number | boolean | string) => {
-    let finalValue = value;
-    if (key === 'maxX' && typeof value === 'number') {
-      finalValue = Math.min(1000, Math.max(10, value));
-    }
-    setState(prev => ({ ...prev, [key]: finalValue }));
+    setState(prev => sanitizeAppState({ ...prev, [key]: value }));
   }, []);
 
   const resetToDefault = useCallback(() => {
     if (window.confirm('Reset all simulation parameters to defaults?')) {
-      setState(defaultState);
+      setState(sanitizeAppState(defaultState));
     }
   }, []);
 
@@ -261,18 +292,46 @@ function App() {
 
   const workerRef = useRef<Worker | null>(null);
   const psdRequestIdRef = useRef(0);
+  const latestPsdResultIdRef = useRef(0);
   const shaperRequestIdRef = useRef(0);
+  const pendingShaperMessageRef = useRef<ShaperWorkerMessage | null>(null);
 
   useEffect(() => {
     workerRef.current = new Worker(new URL('./lib/shaper.worker.ts', import.meta.url), { type: 'module' });
     workerRef.current.onmessage = (e: MessageEvent<WorkerMessage>) => {
       const data = e.data;
+      const applyShaperMessage = (message: ShaperWorkerMessage) => {
+        setExactPending(false);
+        setNozzlePending(false);
+        if (message.scoreTarget === 'nozzle') setRecommendationSource('nozzle');
+        setWorkerResult(prev => {
+          if (!prev) return null;
+          if (message.scoreTarget === 'nozzle') {
+            return {
+              ...prev,
+              nozzleScoreX: message.scoreX,
+              nozzleScoreY: message.scoreY,
+              nozzleScoringMode: message.scoringMode
+            };
+          }
+          return {
+            ...prev,
+            scoreX: message.scoreX,
+            scoreY: message.scoreY,
+            scoringMode: message.scoringMode
+          };
+        });
+      };
+
       if (data.type === 'PSD') {
         if (data.requestId !== psdRequestIdRef.current) return;
+        latestPsdResultIdRef.current = data.requestId;
         setWorkerResult(prev => ({
           ...prev,
           predX: data.predX,
           predY: data.predY,
+          staticPredX: data.staticPredX,
+          staticPredY: data.staticPredY,
           compX: data.compX,
           compY: data.compY,
           freqs: data.freqs,
@@ -280,22 +339,29 @@ function App() {
           psdY: data.psdY,
           psdX_nozzle: data.psdX_nozzle,
           psdY_nozzle: data.psdY_nozzle,
-          scoreX: prev?.scoreX || { results: {}, best_shaper: '' },
-          scoreY: prev?.scoreY || { results: {}, best_shaper: '' },
-          scoringMode: prev?.scoringMode || 'interactive'
+          psdX_nozzle_structural: data.psdX_nozzle_structural,
+          psdY_nozzle_structural: data.psdY_nozzle_structural,
+          scoreX: emptyScoreSet(),
+          scoreY: emptyScoreSet(),
+          scoringMode: 'interactive',
+          nozzleScoreX: undefined,
+          nozzleScoreY: undefined,
+          nozzleScoringMode: undefined
         }));
+        const pending = pendingShaperMessageRef.current;
+        if (pending && pending.psdRequestId === data.requestId && pending.requestId === shaperRequestIdRef.current) {
+          pendingShaperMessageRef.current = null;
+          applyShaperMessage(pending);
+        }
       } else if (data.type === 'SHAPERS') {
         if (data.requestId !== shaperRequestIdRef.current) return;
-        setExactPending(false);
-        setWorkerResult(prev => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            scoreX: data.scoreX,
-            scoreY: data.scoreY,
-            scoringMode: data.scoringMode
-          };
-        });
+        if (data.psdRequestId !== latestPsdResultIdRef.current) {
+          if (data.psdRequestId === psdRequestIdRef.current) {
+            pendingShaperMessageRef.current = data;
+          }
+          return;
+        }
+        applyShaperMessage(data);
       }
     };
     return () => {
@@ -303,16 +369,8 @@ function App() {
     };
   }, []);
 
-  // Sanitize NaN values once before posting to worker
   const getSafeState = useCallback((): AppState => {
-    const safe = { ...state };
-    for (const key in safe) {
-      const k = key as keyof AppState;
-      if (typeof safe[k] === 'number' && isNaN(safe[k] as number)) {
-        (safe as Record<string, unknown>)[k] = defaultState[k];
-      }
-    }
-    return safe;
+    return sanitizeAppState(state);
   }, [state]);
 
   // Instant PSD update for smooth graph interaction
@@ -320,7 +378,19 @@ function App() {
     if (workerRef.current) {
       const requestId = ++psdRequestIdRef.current;
       shaperRequestIdRef.current += 1;
+      pendingShaperMessageRef.current = null;
       setExactPending(false);
+      setNozzlePending(false);
+      setRecommendationSource('adxl');
+      setWorkerResult(prev => prev ? {
+        ...prev,
+        scoreX: emptyScoreSet(),
+        scoreY: emptyScoreSet(),
+        scoringMode: 'interactive',
+        nozzleScoreX: undefined,
+        nozzleScoreY: undefined,
+        nozzleScoringMode: undefined
+      } : prev);
       workerRef.current.postMessage({ type: 'PSD', requestId, state: getSafeState() });
     }
   }, [getSafeState]);
@@ -332,7 +402,8 @@ function App() {
       const handler = setTimeout(() => {
         const requestId = ++shaperRequestIdRef.current;
         setExactPending(false);
-        workerRef.current?.postMessage({ type: 'SHAPERS', requestId, state: getSafeState(), scoringMode: 'interactive' });
+        setNozzlePending(false);
+        workerRef.current?.postMessage({ type: 'SHAPERS', requestId, psdRequestId: psdRequestIdRef.current, state: getSafeState(), scoringMode: 'interactive', scoreTarget: 'adxl' });
       }, 600);
       return () => clearTimeout(handler);
     }
@@ -342,21 +413,37 @@ function App() {
     if (!workerRef.current) return;
     const requestId = ++shaperRequestIdRef.current;
     setExactPending(true);
-    workerRef.current.postMessage({ type: 'SHAPERS', requestId, state: getSafeState(), scoringMode: 'exact' });
+    setNozzlePending(false);
+    setRecommendationSource('adxl');
+    workerRef.current.postMessage({ type: 'SHAPERS', requestId, psdRequestId: psdRequestIdRef.current, state: getSafeState(), scoringMode: 'exact', scoreTarget: 'adxl' });
   }, [getSafeState]);
 
-  const { predX = 0, predY = 0, compX = { belt: 0, frame: 0, motor: 0 }, compY = { belt: 0, frame: 0, motor: 0 }, freqs = new Float64Array(0), psdX = new Float64Array(0), psdY = new Float64Array(0), psdX_nozzle = new Float64Array(0), psdY_nozzle = new Float64Array(0), scoreX = { results: {}, best_shaper: '' }, scoreY = { results: {}, best_shaper: '' }, scoringMode = 'interactive' } = workerResult || {};
+  const runNozzleScoring = useCallback(() => {
+    if (!workerRef.current) return;
+    const requestId = ++shaperRequestIdRef.current;
+    setNozzlePending(true);
+    setExactPending(false);
+    workerRef.current.postMessage({ type: 'SHAPERS', requestId, psdRequestId: psdRequestIdRef.current, state: getSafeState(), scoringMode: 'interactive', scoreTarget: 'nozzle' });
+  }, [getSafeState]);
+
+  const { predX = 0, predY = 0, staticPredX = predX, staticPredY = predY, compX = { belt: 0, frame: 0, motor: 0 }, compY = { belt: 0, frame: 0, motor: 0 }, freqs = new Float64Array(0), psdX = new Float64Array(0), psdY = new Float64Array(0), psdX_nozzle = new Float64Array(0), psdY_nozzle = new Float64Array(0), psdX_nozzle_structural = psdX_nozzle, psdY_nozzle_structural = psdY_nozzle, scoreX = emptyScoreSet(), scoreY = emptyScoreSet(), scoringMode = 'interactive', nozzleScoreX, nozzleScoreY, nozzleScoringMode = 'interactive' } = workerResult || {};
+  const hasNozzleScores = !!nozzleScoreX?.best_shaper && !!nozzleScoreY?.best_shaper;
+  const activeScoreX = recommendationSource === 'nozzle' && nozzleScoreX ? nozzleScoreX : scoreX;
+  const activeScoreY = recommendationSource === 'nozzle' && nozzleScoreY ? nozzleScoreY : scoreY;
+  const activeScoringMode = recommendationSource === 'nozzle' ? nozzleScoringMode : scoringMode;
+  const hasActiveScores = !!activeScoreX.best_shaper && !!activeScoreY.best_shaper;
 
   const chartData = useMemo<LineChartData>(() => {
     if (!workerResult) return { labels: [], datasets: [] };
     const centerFreq = viewAxis === 'x' ? predX : predY;
     const psd = viewAxis === 'x' ? psdX : psdY;
     const psdNozzle = viewAxis === 'x' ? psdX_nozzle : psdY_nozzle;
-    const recommendedShaper = viewAxis === 'x' ? scoreX.best_shaper : scoreY.best_shaper;
+    const psdNozzleStructural = viewAxis === 'x' ? psdX_nozzle_structural : psdY_nozzle_structural;
+    const recommendedShaper = viewAxis === 'x' ? activeScoreX.best_shaper : activeScoreY.best_shaper;
     const activeShaper = selectedShaper === 'recommended' ? recommendedShaper : selectedShaper;
 
     if (graphMode === 'step') {
-      const score = viewAxis === 'x' ? scoreX : scoreY;
+      const score = viewAxis === 'x' ? activeScoreX : activeScoreY;
       const shaperFunc = SHAPERS[activeShaper];
       const shaperFreq = score?.results?.[activeShaper]?.freq ?? centerFreq;
       const shaper = shaperFunc ? shaperFunc(shaperFreq, DEFAULT_DAMPING_RATIO) : null;
@@ -445,40 +532,34 @@ function App() {
           });
         });
 
-      const score = viewAxis === 'x' ? scoreX : scoreY;
-      Object.keys(SHAPERS).forEach(shaperName => {
-        // Only compute the active shaper eagerly; other shapers start hidden
-        if (shaperName !== activeShaper) {
+      const score = viewAxis === 'x' ? activeScoreX : activeScoreY;
+      if (score.best_shaper) {
+        Object.keys(SHAPERS).forEach(shaperName => {
+          const isActive = shaperName === activeShaper;
+          const shaperFunc = SHAPERS[shaperName];
+          const shaperFreq = score.results[shaperName]?.freq ?? centerFreq;
+          const shaper = shaperFunc(shaperFreq, DEFAULT_DAMPING_RATIO);
+          const response = estimate_shaper(shaper, state.dampingRatio, freqs);
+          const smoothedPsd = new Float64Array(psdNozzle.length);
+          for (let i = 0; i < psdNozzle.length; i++) {
+            const structural = psdNozzleStructural[i] ?? 0;
+            const operating = psdNozzle[i] ?? 0;
+            const speedOnly = Math.max(0, operating - structural);
+            smoothedPsd[i] = structural * response[i] + speedOnly;
+          }
+          
           datasets.push({
-            label: shaperNames[shaperName],
-            data: [],
-            borderColor: colors[shaperName],
-            borderWidth: 1.5,
-            borderDash: [3, 3],
+            label: `After ${recommendationSource === 'nozzle' ? 'nozzle diagnostic' : 'Klipper'} shaper (${shaperNames[shaperName]}) — nozzle`,
+            data: toChartPoints(freqs, smoothedPsd),
+            borderColor: isActive ? '#00ffff' : colors[shaperName],
+            borderWidth: isActive ? 2.5 : 1.5,
+            borderDash: isActive ? [5, 5] : [3, 3],
             fill: false,
             pointRadius: 0,
-            hidden: true,
+            hidden: !isActive,
           });
-          return;
-        }
-
-        const shaperFunc = SHAPERS[shaperName];
-        const shaperFreq = score?.results?.[shaperName]?.freq ?? centerFreq;
-        const shaper = shaperFunc(shaperFreq, DEFAULT_DAMPING_RATIO);
-        const response = estimate_shaper(shaper, state.dampingRatio, freqs);
-        const smoothedPsd = new Float64Array(psdNozzle.length);
-        for (let i = 0; i < psdNozzle.length; i++) smoothedPsd[i] = psdNozzle[i] * response[i];
-        
-        datasets.push({
-          label: `After shaper (${shaperNames[shaperName]}) — nozzle`,
-          data: toChartPoints(freqs, smoothedPsd),
-          borderColor: '#00ffff',
-          borderWidth: 2,
-          borderDash: [5, 5],
-          fill: false,
-          pointRadius: 0,
         });
-      });
+      }
 
       return { labels: [], datasets };
     }
@@ -496,8 +577,11 @@ function App() {
     psdY,
     psdX_nozzle,
     psdY_nozzle,
-    scoreX,
-    scoreY,
+    psdX_nozzle_structural,
+    psdY_nozzle_structural,
+    activeScoreX,
+    activeScoreY,
+    recommendationSource,
     freqs
   ]);
 
@@ -653,34 +737,79 @@ function App() {
     }];
   }, []);
 
+  const nozzleDiagnostics = useMemo(() => {
+    if (!workerResult) return null;
+    const xAdxl = peakInfo(freqs, psdX);
+    const xNozzle = peakInfo(freqs, psdX_nozzle);
+    const yAdxl = peakInfo(freqs, psdY);
+    const yNozzle = peakInfo(freqs, psdY_nozzle);
+    const xSecondary = secondaryDeltaInfo(freqs, psdX, psdX_nozzle, predX);
+    const ySecondary = secondaryDeltaInfo(freqs, psdY, psdY_nozzle, predY);
+    const ratio = (nozzle: number, adxl: number) => adxl > 0 ? nozzle / adxl : 0;
+    return {
+      xRatio: ratio(xNozzle.value, xAdxl.value),
+      yRatio: ratio(yNozzle.value, yAdxl.value),
+      xAdxlFreq: xAdxl.freq,
+      xNozzleFreq: xNozzle.freq,
+      yAdxlFreq: yAdxl.freq,
+      yNozzleFreq: yNozzle.freq,
+      xSecondaryRatio: xSecondary.ratio,
+      xSecondaryFreq: xSecondary.freq,
+      ySecondaryRatio: ySecondary.ratio,
+      ySecondaryFreq: ySecondary.freq
+    };
+  }, [workerResult, freqs, predX, predY, psdX, psdY, psdX_nozzle, psdY_nozzle]);
+
   const klipperConsoleOutput = useMemo(() => {
-    if (!workerResult || !scoreX.best_shaper || !scoreY.best_shaper) return 'Calculating shaper recommendations...';
+    if (!workerResult || !hasActiveScores) return 'Calculating shaper recommendations...';
     const displayAccel = (a: number) => Math.round(a / 100.0) * 100.0;
-    const modeLabel = scoringMode === 'exact'
+    const modeLabel = activeScoringMode === 'exact'
       ? 'Exact Klipper-style exhaustive scan'
       : 'Fast interactive scan';
+    const speedSuffix = state.enableDynamicSpeed ? ' standstill structural' : '';
+    const sourceLabel = recommendationSource === 'nozzle'
+      ? `NOZZLE DIAGNOSTIC${speedSuffix} PSD (not Klipper default)`
+      : `ADXL${speedSuffix} PSD (Klipper default)`;
     
-    let out = `${modeLabel} based on ADXL PSD.\nThe 'After shaper' graph overlay shows predicted nozzle vibration after shaping.\n\n`;
-    out += `========== X AXIS (${predX.toFixed(1)} Hz) ==========\n`;
+    let out = `${modeLabel} based on ${sourceLabel}.\nThe 'After shaper' graph overlay shows predicted nozzle vibration after shaping.\n`;
+    if (state.enableDynamicSpeed) {
+      out += `Speed simulation is displayed on the graph at ${state.printSpeed} mm/s; shaper scoring ignores belt-mesh forcing.\n`;
+    }
+    if (recommendationSource === 'nozzle') {
+      out += `Klipper's default ADXL recommendations remain available; this output is an explicit nozzle what-if analysis.\n`;
+    }
+    const consolePredX = state.enableDynamicSpeed ? staticPredX : predX;
+    const consolePredY = state.enableDynamicSpeed ? staticPredY : predY;
+    out += `\n`;
+    out += `========== X AXIS (${consolePredX.toFixed(1)} Hz) ==========\n`;
     for (const s of Object.keys(shaperNames)) {
-        const r = scoreX.results[s];
+        const r = activeScoreX.results[s];
         out += `Fitted shaper '${s}' frequency = ${r.freq.toFixed(1)} Hz (vibrations = ${r.vibrations.toFixed(1)}%, smoothing ~= ${r.smoothing.toFixed(3)})\n`;
         out += `To avoid too much smoothing with '${s}', suggested max_accel <= ${displayAccel(r.max_accel)} mm/sec^2\n`;
     }
-    const recX = scoreX.results[scoreX.best_shaper];
-    out += `\nRecommended shaper is ${scoreX.best_shaper} @ ${recX.freq.toFixed(1)} Hz (Max Accel: ${displayAccel(recX.max_accel)} mm/s²)\n\n`;
+    const recX = activeScoreX.results[activeScoreX.best_shaper];
+    out += `\nRecommended shaper is ${activeScoreX.best_shaper} @ ${recX.freq.toFixed(1)} Hz (Max Accel: ${displayAccel(recX.max_accel)} mm/s²)\n`;
+    if (recommendationSource === 'nozzle' && scoreX.best_shaper) {
+      const adxlRecX = scoreX.results[scoreX.best_shaper];
+      out += `Klipper ADXL baseline: ${scoreX.best_shaper} @ ${adxlRecX.freq.toFixed(1)} Hz\n`;
+    }
+    out += `\n`;
 
-    out += `========== Y AXIS (${predY.toFixed(1)} Hz) ==========\n`;
+    out += `========== Y AXIS (${consolePredY.toFixed(1)} Hz) ==========\n`;
     for (const s of Object.keys(shaperNames)) {
-        const r = scoreY.results[s];
+        const r = activeScoreY.results[s];
         out += `Fitted shaper '${s}' frequency = ${r.freq.toFixed(1)} Hz (vibrations = ${r.vibrations.toFixed(1)}%, smoothing ~= ${r.smoothing.toFixed(3)})\n`;
         out += `To avoid too much smoothing with '${s}', suggested max_accel <= ${displayAccel(r.max_accel)} mm/sec^2\n`;
     }
-    const recY = scoreY.results[scoreY.best_shaper];
-    out += `\nRecommended shaper is ${scoreY.best_shaper} @ ${recY.freq.toFixed(1)} Hz (Max Accel: ${displayAccel(recY.max_accel)} mm/s²)\n`;
+    const recY = activeScoreY.results[activeScoreY.best_shaper];
+    out += `\nRecommended shaper is ${activeScoreY.best_shaper} @ ${recY.freq.toFixed(1)} Hz (Max Accel: ${displayAccel(recY.max_accel)} mm/s²)\n`;
+    if (recommendationSource === 'nozzle' && scoreY.best_shaper) {
+      const adxlRecY = scoreY.results[scoreY.best_shaper];
+      out += `Klipper ADXL baseline: ${scoreY.best_shaper} @ ${adxlRecY.freq.toFixed(1)} Hz\n`;
+    }
     
     return out;
-  }, [workerResult, predX, predY, scoreX, scoreY, scoringMode]);
+  }, [workerResult, hasActiveScores, predX, predY, staticPredX, staticPredY, scoreX, scoreY, activeScoreX, activeScoreY, activeScoringMode, recommendationSource, state.enableDynamicSpeed, state.printSpeed]);
 
   return (
     <div className="app-container">
@@ -755,6 +884,23 @@ function App() {
               >
                 <WarningCircle weight="bold" /> {exactPending ? 'Exact...' : 'Exact Klipper'}
               </button>
+              <button
+                className="nav-btn nav-btn-snapshot"
+                onClick={runNozzleScoring}
+                disabled={nozzlePending}
+                title="Run an explicit nozzle-based what-if recommendation"
+              >
+                <WarningCircle weight="bold" /> {nozzlePending ? 'Nozzle...' : 'Nozzle Recs'}
+              </button>
+              {recommendationSource === 'nozzle' && hasNozzleScores && (
+                <button
+                  className="nav-btn nav-btn-clear"
+                  onClick={() => setRecommendationSource('adxl')}
+                  title="Return to Klipper's default ADXL-based recommendations"
+                >
+                  <XCircle weight="bold" /> Use ADXL
+                </button>
+              )}
             </div>
 
             <div className="toggle-group">
@@ -792,7 +938,7 @@ function App() {
         <ChartDisplay data={chartData} options={chartOptions} plugins={plugins}>
           <DraggableOverlay defaultPosition={{ top: 24, right: 24 }}>
             <div className="prediction-box mt-0">
-              <h4>Predicted Resonance</h4>
+              <h4>{recommendationSource === 'nozzle' ? 'Nozzle Diagnostic Recs' : 'Klipper ADXL Recs'}</h4>
               <div className="prediction-freq-list">
                 <div className="prediction-item">
                   <span className="axis-label">X Axis</span>
@@ -811,11 +957,7 @@ function App() {
                       </div>
                     </div>
                   )}
-                  {scoreX?.best_shaper && (
-                    <div className="shaper-detail">
-                      {Math.round(scoreX.results[scoreX.best_shaper].max_accel / 100.0) * 100.0} mm/s² | {scoreX.best_shaper}
-                    </div>
-                  )}
+                  {hasActiveScores ? renderShaperDetail(activeScoreX) : <div className="shaper-detail">Calculating...</div>}
                 </div>
                 <div className="prediction-item">
                   <span className="axis-label">Y Axis</span>
@@ -834,11 +976,7 @@ function App() {
                       </div>
                     </div>
                   )}
-                  {scoreY?.best_shaper && (
-                    <div className="shaper-detail">
-                      {Math.round(scoreY.results[scoreY.best_shaper].max_accel / 100.0) * 100.0} mm/s² | {scoreY.best_shaper}
-                    </div>
-                  )}
+                  {hasActiveScores ? renderShaperDetail(activeScoreY) : <div className="shaper-detail">Calculating...</div>}
                 </div>
               </div>
             </div>
@@ -850,17 +988,32 @@ function App() {
             <h3><Info /> About the Math & Attribution</h3>
             <p>This simulator runs a Javascript port of Klipper's internal <code>shaper_calibrate.py</code> math in real-time. The chart shows the maximum acceleration each shaper can sustain before it introduces too much smoothing (defined by the Smoothing Threshold) into your prints.</p>
             <p className="license-text">
-              <strong>License & Attribution:</strong> This simulator is open-source and licensed under the <a href="https://github.com/Jumpybeetroot/shaper-sim/blob/main/LICENSE" target="_blank">GNU GPLv3 License</a>. The Input Shaper frequency response and scoring algorithms are mathematically ported directly from the source code of <a href="https://github.com/Klipper3d/klipper" target="_blank">Klipper3d</a>.
+              <strong>License & Attribution:</strong> This simulator is open-source and licensed under the <a href="https://github.com/Jumpybeetroot/shaper-sim/blob/main/LICENSE" target="_blank" rel="noreferrer">GNU GPLv3 License</a>. The Input Shaper frequency response and scoring algorithms are mathematically ported directly from the source code of <a href="https://github.com/Klipper3d/klipper" target="_blank" rel="noreferrer">Klipper3d</a>.
             </p>
           </div>
           <div className="panel">
             <h3><WarningCircle /> Predictive Mode</h3>
             <p>The mechanical predictions are rough estimates based on a simplified mass-spring system <em>f = 1/(2π) √(K/M)</em>. Actual results will vary. Always use an ADXL345 accelerometer for precise tuning.</p>
           </div>
+          <div className="panel">
+            <h3><WarningCircle /> Nozzle Diagnostic</h3>
+            {nozzleDiagnostics ? (
+              <p>
+                Klipper recommendations use ADXL PSD by default. Nozzle PSD peak ratios are X {nozzleDiagnostics.xRatio.toFixed(2)}x
+                {' '}({nozzleDiagnostics.xNozzleFreq.toFixed(1)} Hz nozzle vs {nozzleDiagnostics.xAdxlFreq.toFixed(1)} Hz ADXL)
+                and Y {nozzleDiagnostics.yRatio.toFixed(2)}x ({nozzleDiagnostics.yNozzleFreq.toFixed(1)} Hz nozzle vs {nozzleDiagnostics.yAdxlFreq.toFixed(1)} Hz ADXL).
+                Secondary nozzle humps add X {(nozzleDiagnostics.xSecondaryRatio * 100).toFixed(0)}% near {nozzleDiagnostics.xSecondaryFreq.toFixed(1)} Hz
+                and Y {(nozzleDiagnostics.ySecondaryRatio * 100).toFixed(0)}% near {nozzleDiagnostics.ySecondaryFreq.toFixed(1)} Hz relative to the ADXL primary peak.
+                Use <strong>Nozzle Recs</strong> only as an explicit print-quality what-if.
+              </p>
+            ) : (
+              <p>Nozzle diagnostics will appear after the first PSD calculation.</p>
+            )}
+          </div>
         </div>
 
         <div className="card">
-          <h2 className="card-title">Simulated Klipper Output</h2>
+          <h2 className="card-title">{recommendationSource === 'nozzle' ? 'Nozzle Diagnostic Output' : 'Simulated Klipper Output'}</h2>
           <pre className="klipper-console">{klipperConsoleOutput}</pre>
         </div>
       </main>

@@ -95,14 +95,22 @@ Klipper's `TEST_RESONANCES` measures at standstill — maximum torque, stiff mag
 
 During a real print at high speed, two dynamic effects occur:
 
-1. **Back-EMF Torque Drop-off**: Speed fights the stepper driver. As speed increases, holding torque drops, softening the magnetic spring, which in turn **drops the resonance frequency**. 
-   The simulator models this using a hyperbolic curve:
-   $$TorqueFactor = \frac{1}{1 + (v / 600)^{1.5}}$$
-   This visualizes why static input shapers (tuned at standstill) become desynchronized and struggle at high speeds (e.g., 500+ mm/s).
+1. **Back-EMF Torque Drop-off**: Speed fights the stepper driver. As speed increases, the driver has less voltage headroom to force current through the winding resistance, winding inductance, and motor back-EMF. Lower phase current softens the magnetic spring, which in turn **drops the resonance frequency**.
+   The simulator models this with a simplified electrical headroom calculation:
+   $$motor\_rps = \frac{v}{pulley\_teeth \cdot 2mm}$$
+   $$f_{electrical} = motor\_rps \cdot N_r$$
+   $$X_L = 2\pi f_{electrical}L$$
+   $$Z = \sqrt{R^2 + X_L^2}$$
+   $$V_{bemf} \approx K_t \cdot 2\pi motor\_rps,\quad K_t = \frac{T_{hold}}{I_{rated}}$$
+   $$I_{available} = \frac{\sqrt{V_{limit}^2 - V_{bemf}^2}}{Z}$$
+   $$TorqueFactor = clamp\left(\frac{I_{available}}{I_{commanded}}, 0, 1\right)$$
+   where $V_{limit}$ is 92% of the configured supply voltage. This is still an approximation: it does not model chopper timing, microstep phase angle, driver decay mode, temperature, or a measured torque-speed curve. It is more physically grounded than the old fixed-speed knee because voltage, pulley tooth count, resistance, inductance, rated current, and rotor tooth count all affect high-speed torque.
 
 2. **Belt Tooth Meshing Vibration**: A standard GT2 belt has a 2mm pitch. As it runs over the pulley, the teeth meshing action injects a continuous excitation frequency at:
    $$f_{mesh} = \frac{v}{2} \text{ Hz}$$
-   When **Speed Simulation** is enabled, the simulator injects a specific Lorentzian peak into the PSD curve at this frequency. The amplitude scales with the speed, producing a distinct, tracking peak that can interact with the primary resonance if their frequencies align.
+   When **Speed Simulation** is enabled, the simulator injects a specific Lorentzian peak into the displayed PSD curve at this frequency. The amplitude scales with speed, producing a distinct, tracking peak that can interact with the primary resonance if their frequencies align.
+
+Speed Simulation changes the displayed operating-speed PSD and predicted operating resonance. It does **not** change default Klipper-compatible scoring. Shaper recommendations continue to score the standstill structural PSD: ADXL by default, or nozzle PSD only when the explicit Nozzle Recs diagnostic path is used. The graph's "After shaper" overlay shapes the structural nozzle vibration but leaves belt-mesh forcing visible because input shapers do not cancel continuous pulley tooth excitation the same way they cancel resonant ringdown.
 
 ---
 
@@ -112,9 +120,14 @@ The simulator ports Klipper's exact post-processing math from `shaper_calibrate.
 
 1. **PSD generation:** `generate_psd_curve()` produces a Lorentzian peak centered on the predicted resonance frequency. Width = `center_freq * damping_ratio` (HWHM of $|H(\omega)|^2$). Peak amplitude ∝ $Q^2$ because `TEST_RESONANCES` runs a steady-state chirp, not an impulse. A full 2nd-order transfer function would have thinner high-frequency tails, but that model is deferred until the empirical secondary-peak constants can be retuned.
 
-2. **Mechanical imperfections:** Sliders like 3D COM Offsets, Bearing Preload, Hose Drag, and Gantry Racking inject geometrically calculated secondary frequency harmonics into the PSD curve. The simulator uses the right-hand rule to calculate orthogonal Yaw, Pitch, and Roll torques based on COM offsets. The amplitude of the resulting vibration peak is evaluated based on the exact 3D mounting offset of the ADXL sensor versus the Nozzle, and heavily damped by sliding friction from the rail bearing preload. The 70 mm torsion normalizer is a characteristic toolhead moment arm; the broad hose/sway multipliers approximate modal smearing and viscoelastic broadening in distributed flexible structures.
+2. **Mechanical imperfections:** Sliders like 3D COM Offsets, Bearing Preload, Hose Drag, and Gantry Racking inject geometrically calculated secondary frequency harmonics into the PSD curve. COM-induced rigid-body modes use the right-hand rule:
+   $$\vec{\tau} = \vec{r}_{COM} \times \vec{F}_{axis}$$
+   and measure each rotational mode at the ADXL or nozzle location with:
+   $$measurement = (\vec{\alpha}_{mode} \times \vec{r}_{sensor}) \cdot \hat{a}_{axis}$$
+   This gives X motion yaw from Y COM offset, Y motion yaw from X COM offset, and roll/pitch from Z COM offset. A separate local toolhead/nozzle flex mode is also added from the carriage-to-sensor lever arm, so nozzle-local vibration can appear even when the rigid-body COM torque term is small. The 70 mm torsion normalizer is a characteristic toolhead moment arm; the broad hose/sway/flex multipliers approximate modal smearing and viscoelastic broadening in distributed flexible structures.
+   `toolheadStiffness = 1.0` is a stiff printed baseline. Values below 1.0 model flexible printed stacks; the StealthBurner preset uses `0.65` so the local nozzle-flex mode is visibly stronger than the generic baseline. The stiffness scale is still provisional and should not be treated as measured fact; it is a relative what-if control until real modal measurements can calibrate the values.
 
-3. **Shaper scoring:** `scoreShapers()` tests all five shapers using Klipper minimum frequencies (ZV 21Hz, MZV 23Hz, EI 29Hz, 2HUMP_EI 39Hz, 3HUMP_EI 48Hz), high-to-low iteration, and an interactive two-pass search: 2Hz coarse spacing followed by 0.2Hz fine spacing around the best vibration pocket. The Exact Klipper control runs `scoreShapersExact()`, an exhaustive 0.2Hz scan across the full allowed frequency range. Scoring uses Klipper's empirical formula:
+3. **Shaper scoring:** `scoreShapers()` tests all five shapers using Klipper minimum frequencies (ZV 21Hz, MZV 23Hz, EI 29Hz, 2HUMP_EI 39Hz, 3HUMP_EI 48Hz), high-to-low iteration, and an interactive two-pass search: 2Hz coarse spacing followed by 0.2Hz fine spacing around the best vibration pocket. The Exact Klipper control runs `scoreShapersExact()`, an exhaustive 0.2Hz scan across the full allowed frequency range. Default recommendations always score the standstill ADXL PSD to match Klipper's calibration behavior. The Nozzle Recs button explicitly scores standstill nozzle PSD as a print-quality diagnostic/what-if, not as the default Klipper recommendation. Speed Simulation is rendered as an operating-speed overlay and its belt-mesh peak is excluded from scoring. Scoring uses Klipper's empirical formula:
    $$\text{score} = \text{smoothing} \times \left(v^{1.5} + 0.2v + 0.01\right)$$
    where $v$ = remaining vibration fraction. Shaper construction uses `DEFAULT_DAMPING_RATIO = 0.1`, and remaining vibration is pessimized over Klipper's test damping ratios `[0.075, 0.1, 0.15]`.
 

@@ -61,11 +61,34 @@ $$ PSD_{primary}(f) = \frac{A_{base}}{1 + \left(\frac{f - f_c}{w}\right)^2} $$
 * $w = f_c \cdot \zeta$ (Half Width at Half Maximum).
 * This intentionally keeps the existing Lorentzian peak model. An exact 2nd-order transfer function would produce thinner high-frequency tails ($1/f^4$ instead of $1/f^2$), but changing it requires retuning the empirical secondary-peak constants.
 
-### 2.2 Secondary Torsional Peaks (Yaw, Roll/Pitch)
-* Frequencies are shifted: $f_{yaw} = f_c \cdot 1.25$, $f_{rp} = f_c \cdot 1.15$
-* **Characteristic Moment Arm:** The calculation divides COM and sensor offsets by `TORSION_NORMALIZER_MM = 70.0`, a representative rail-carriage-to-nozzle/ADXL lever arm for a standard toolhead.
-* **Empirical Dampening:** $w_{twist} = f_{twist} \cdot \zeta \cdot 1.333 \cdot \text{bearing\_preload}^{1.5}$. (The $1.333$ width multiplier is legacy from an old FWHM convention and needs an empirical re-tune).
-* Amplitudes are scaled by `0.8` (Yaw) and `0.6` (Roll/Pitch).
+### 2.2 Toolhead Offset Peaks
+
+The offset model separates rigid-body rotation from local nozzle/toolhead flex.
+
+#### A. Rigid-body yaw and tilt
+The simulator now computes COM-induced torque with vector math instead of axis-specific hand rules:
+$$ \vec{\tau} = \vec{r}_{COM} \times \vec{F}_{axis} $$
+The observed acceleration at the ADXL or nozzle point is the projection of rotational acceleration onto the active measurement axis:
+$$ measurement = (\vec{\alpha}_{mode} \times \vec{r}_{sensor}) \cdot \hat{a}_{axis} $$
+This reproduces the expected CoreXY geometry:
+* X acceleration: Y COM offset drives yaw; Z COM offset drives pitch.
+* Y acceleration: X COM offset drives yaw; Z COM offset drives roll.
+
+Amplitudes scale with the product of torque arm and measurement arm:
+$$ A_{yaw} \propto \left|\frac{\tau_z}{70}\right|\left|\frac{measurement_z}{70}\right| \cdot 0.8 $$
+$$ A_{tilt} \propto \left|\frac{\tau_{roll/pitch}}{70}\right|\left|\frac{measurement_{roll/pitch}}{70}\right| \cdot 0.6 $$
+Frequencies are shifted to $f_{yaw}=1.25f_c$ and $f_{tilt}=1.15f_c$, adjusted upward by $\sqrt{toolhead\_stiffness \cdot bearing\_preload}$.
+
+#### B. Local nozzle/toolhead flex
+Rigid-body rotation requires both a COM torque arm and a measurement arm. Real printed toolheads can also flex locally between the rail carriage and nozzle, even when a COM offset is near zero. The simulator therefore adds a separate local-flex mode:
+$$ A_{flex} \propto \left(\frac{lever_{sensor}}{70}\right)^2 \cdot 0.22 $$
+where $lever_{sensor}$ is the distance from the active motion axis to the ADXL/nozzle point. Carriage-mounted ADXL sensors use a partial participation factor of `0.35`; nozzle PSD and nozzle-mounted ADXL sensors use full participation.
+
+The local-flex frequency is centered around $1.35f_c$ and broadened more than rigid-body torsion because printed/plastic toolheads have smeared local modes rather than a single clean oscillator.
+
+* **Characteristic Moment Arm:** `TORSION_NORMALIZER_MM = 70.0` is a representative rail-carriage-to-nozzle/ADXL lever arm for a standard toolhead.
+* **Empirical Damping:** rigid-body widths use $w = f \cdot \zeta \cdot 1.333 \cdot \text{bearing\_preload}^{1.5}$; local flex uses a wider `1.6` multiplier.
+* **Toolhead Stiffness Scale:** `toolheadStiffness = 1.0` is a stiff printed baseline, not the minimum possible. Flexible printed stacks and StealthBurner-style assemblies can use values below 1.0; the StealthBurner preset uses `0.65` to increase local flex amplitude and lower the flex-mode frequency. These values are provisional model estimates, not measured material facts, and should be treated as relative what-if controls until real modal measurements are available.
 
 ### 2.3 Empirical External Peaks
 * **Sway:** $w = f_{sway} \cdot \zeta \cdot 5.8 \cdot \text{broadening\_factor}$
@@ -140,6 +163,8 @@ Lower is better. The simulator uses Klipper's shaper minimum frequencies (ZV 21H
 * **Exact Klipper-style:** an exhaustive 0.2Hz scan across the full allowed frequency range.
 Remaining vibration is pessimized across $\zeta = [0.075, 0.1, 0.15]$ while shapers are still constructed with Klipper's default $\zeta = 0.1$.
 When scores are tied, the higher shaper frequency is preferred because its shorter impulse train creates less smoothing delay. Fast mode uses a smoothing-aware ZV override; exact mode uses Klipper's final ZV override based on >10% better residual vibration.
+
+Default recommendations always score the simulated ADXL PSD, matching Klipper's calibration path. The nozzle PSD is shown as a print-quality diagnostic. Users can explicitly run a nozzle-based what-if recommendation, but that mode is labeled separately and is not the default Klipper recommendation.
 
 ---
 

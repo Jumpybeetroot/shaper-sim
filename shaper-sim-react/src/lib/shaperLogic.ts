@@ -25,9 +25,8 @@ export const SHAPER_MIN_FREQS: Record<string, number> = {
     '3hump_ei': 48.0
 };
 
-// --- Torsion Model Tuning Constants --- //
-// Normalizer distance (mm) — calibrated so a Stealthburner at COM_Y=20, sensor_Y=45
-// produces ~15% secondary amplitude relative to primary peak.
+// --- Toolhead Mode Tuning Constants --- //
+// Characteristic carriage-to-nozzle moment arm for a compact toolhead.
 const TORSION_NORMALIZER_MM = 70.0;
 const YAW_FREQ_MULT = 1.25;           // Yaw torsional mode frequency multiplier
 const YAW_FREQ_FLOOR = 1.20;          // Minimum frequency clamp for yaw
@@ -35,12 +34,51 @@ const YAW_AMP_COEFF = 0.8;            // Yaw amplitude coefficient
 const ROLL_PITCH_FREQ_MULT = 1.15;    // Roll/Pitch torsional mode frequency multiplier
 const ROLL_PITCH_FREQ_FLOOR = 1.15;   // Minimum frequency clamp for roll/pitch
 const ROLL_PITCH_AMP_COEFF = 0.6;     // Roll/Pitch amplitude coefficient
+const LOCAL_FLEX_FREQ_MULT = 1.35;    // Local toolhead/nozzle flex mode multiplier
+const LOCAL_FLEX_FREQ_FLOOR = 1.25;   // Minimum frequency clamp for local flex
+const LOCAL_FLEX_AMP_COEFF = 0.22;    // Local nozzle-flex amplitude coefficient
 const TORSION_DAMPING_WIDTH = 1.333;  // Lorentzian half-width damping factor
+const LOCAL_FLEX_DAMPING_WIDTH = 1.6; // Local printed-toolhead flex is more smeared
 const PRELOAD_DAMPING_EXP = 1.5;      // Exponent for bearing preload → damping conversion
+const CARRIAGE_SENSOR_FLEX_PARTICIPATION = 0.35;
+const GT2_BELT_PITCH_MM = 2.0;
+const DRIVER_VOLTAGE_UTILIZATION = 0.92;
+
+type Vec3 = [number, number, number];
+
+export interface ToolheadModeFactors {
+    yawTorqueMm: number;
+    yawMeasurementMm: number;
+    tiltTorqueMm: number;
+    tiltMeasurementMm: number;
+    localFlexLeverMm: number;
+    localFlexParticipation: number;
+}
 
 export interface Shaper {
     A: number[];
     T: number[];
+}
+
+export interface StepperSpeedTorqueParams {
+    printSpeed: number;
+    pulleyTeeth: number;
+    motorRotorTeeth: number;
+    motorVoltage: number;
+    motorRatedCurrent: number;
+    motorResistance: number;
+    motorInductance: number;
+    motorTorque: number;
+    motorCurrentPct: number;
+}
+
+export interface StepperSpeedTorqueResult {
+    factor: number;
+    motorRps: number;
+    electricalHz: number;
+    availableCurrent: number;
+    commandedCurrent: number;
+    backEmfVoltage: number;
 }
 
 export interface Imperfections {
@@ -228,7 +266,47 @@ export function find_shaper_max_accel(shaper: Shaper, scv: number): number {
 
 // --- Predictive Mechanical Model --- //
 
-export function predict_resonance(mass_g: number, belt_EA: number, tension_N: number, frame_multiplier: number, belt_length_mm: number, drive_type: number = 2, motor_torque_mNm: number = 550, motor_current_pct: number = 70, motor_rotor_teeth: number = 50, pulley_teeth: number = 20, motor_inertia_g_cm2: number = 84.5, belt_density_kg_m: number = 0.0012, print_speed: number = 0): { f: number, compliance: { belt: number, frame: number, motor: number } } {
+export function computeStepperSpeedTorque(params: StepperSpeedTorqueParams): StepperSpeedTorqueResult {
+    const safePulleyTeeth = Math.max(1, params.pulleyTeeth);
+    const safeRotorTeeth = Math.max(1, params.motorRotorTeeth);
+    const motorRps = Math.max(0, params.printSpeed) / (safePulleyTeeth * GT2_BELT_PITCH_MM);
+    const electricalHz = motorRps * safeRotorTeeth;
+    const commandedCurrent = Math.max(0.001, params.motorRatedCurrent * (params.motorCurrentPct / 100.0));
+
+    if (motorRps <= 0) {
+        return {
+            factor: 1,
+            motorRps,
+            electricalHz,
+            availableCurrent: commandedCurrent,
+            commandedCurrent,
+            backEmfVoltage: 0
+        };
+    }
+
+    const resistance = Math.max(0.001, params.motorResistance);
+    const inductanceH = Math.max(0.000001, params.motorInductance / 1000.0);
+    const voltageLimit = Math.max(0, params.motorVoltage * DRIVER_VOLTAGE_UTILIZATION);
+    const torqueConstant = Math.max(0, params.motorTorque / 1000.0) / Math.max(0.001, params.motorRatedCurrent);
+    const mechanicalOmega = motorRps * 2.0 * Math.PI;
+    const backEmfVoltage = torqueConstant * mechanicalOmega;
+    const inductiveReactance = 2.0 * Math.PI * electricalHz * inductanceH;
+    const phaseImpedance = Math.hypot(resistance, inductiveReactance);
+    const currentVoltageHeadroom = Math.sqrt(Math.max(0, voltageLimit * voltageLimit - backEmfVoltage * backEmfVoltage));
+    const availableCurrent = phaseImpedance > 0 ? currentVoltageHeadroom / phaseImpedance : commandedCurrent;
+    const factor = Math.min(1, Math.max(0, availableCurrent / commandedCurrent));
+
+    return {
+        factor,
+        motorRps,
+        electricalHz,
+        availableCurrent,
+        commandedCurrent,
+        backEmfVoltage
+    };
+}
+
+export function predict_resonance(mass_g: number, belt_EA: number, tension_N: number, frame_multiplier: number, belt_length_mm: number, drive_type: number = 2, motor_torque_mNm: number = 550, motor_current_pct: number = 70, motor_rotor_teeth: number = 50, pulley_teeth: number = 20, motor_inertia_g_cm2: number = 84.5, belt_density_kg_m: number = 0.0012, print_speed: number = 0, motor_voltage: number = 24, motor_rated_current: number = 2.5, motor_resistance: number = 1.2, motor_inductance: number = 1.5): { f: number, compliance: { belt: number, frame: number, motor: number } } {
     let M = mass_g / 1000.0;
     const L = belt_length_mm / 1000.0;
     
@@ -250,16 +328,23 @@ export function predict_resonance(mass_g: number, belt_EA: number, tension_N: nu
     if (current_ratio > 1.0) {
         saturation_factor = 1.0 + 0.5 * (1.0 - Math.exp(-2.0 * (current_ratio - 1.0)));
     }
-    const effective_torque_Nm = (motor_torque_mNm / 1000.0) * saturation_factor;
+    const speedTorque = computeStepperSpeedTorque({
+        printSpeed: print_speed,
+        pulleyTeeth: pulley_teeth,
+        motorRotorTeeth: motor_rotor_teeth,
+        motorVoltage: motor_voltage,
+        motorRatedCurrent: motor_rated_current,
+        motorResistance: motor_resistance,
+        motorInductance: motor_inductance,
+        motorTorque: motor_torque_mNm,
+        motorCurrentPct: motor_current_pct
+    });
+    const effective_torque_Nm = (motor_torque_mNm / 1000.0) * saturation_factor * speedTorque.factor;
     const K_theta = effective_torque_Nm * motor_rotor_teeth;
     
     const pulley_radius_m = (pulley_teeth * 2.0) / (2.0 * Math.PI) / 1000.0;
     const Kmotor_single = K_theta / Math.pow(pulley_radius_m, 2);
-    
-    const torque_factor = print_speed > 0
-        ? 1.0 / (1.0 + Math.pow(print_speed / 600.0, 1.5))
-        : 1.0;
-    const Kmotor_total = Kmotor_single * drive_type * torque_factor;
+    const Kmotor_total = Math.max(Kmotor_single * drive_type, 1e-9);
     
     const Keff = 1.0 / (1.0 / Kbelt + 1.0 / Kframe + 1.0 / Kmotor_total);
     
@@ -299,6 +384,79 @@ export const SHAPERS: Record<string, (f: number, d: number) => Shaper> = {
 
 // --- PSD Simulation --- //
 
+function cross(a: Vec3, b: Vec3): Vec3 {
+    return [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0]
+    ];
+}
+
+function dot(a: Vec3, b: Vec3): number {
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function axisVector(axis: 'x' | 'y'): Vec3 {
+    return axis === 'x' ? [1, 0, 0] : [0, 1, 0];
+}
+
+function rotationVector(index: 0 | 1 | 2): Vec3 {
+    return index === 0 ? [1, 0, 0] : index === 1 ? [0, 1, 0] : [0, 0, 1];
+}
+
+function rotationalMeasurementMm(rotationAxisIndex: 0 | 1 | 2, measurementOffset: Vec3, measurementAxis: Vec3): number {
+    return dot(cross(rotationVector(rotationAxisIndex), measurementOffset), measurementAxis);
+}
+
+function distanceFromActiveAxis(offset: Vec3, axis: 'x' | 'y'): number {
+    return axis === 'x'
+        ? Math.hypot(offset[1], offset[2])
+        : Math.hypot(offset[0], offset[2]);
+}
+
+function sameOffset(a: Vec3, b?: Vec3): boolean {
+    return !!b && Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9 && Math.abs(a[2] - b[2]) < 1e-9;
+}
+
+export function calculateToolheadModeFactors(
+    axis: 'x' | 'y',
+    comOffset: Vec3,
+    measurementOffset: Vec3,
+    target: 'adxl' | 'nozzle' | 'base' = 'adxl',
+    nozzleOffset?: Vec3
+): ToolheadModeFactors {
+    if (target === 'base') {
+        return {
+            yawTorqueMm: 0,
+            yawMeasurementMm: 0,
+            tiltTorqueMm: 0,
+            tiltMeasurementMm: 0,
+            localFlexLeverMm: 0,
+            localFlexParticipation: 0
+        };
+    }
+
+    const measurementAxis = axisVector(axis);
+    const torque = cross(comOffset, measurementAxis);
+    const tiltAxisIndex: 0 | 1 = axis === 'x' ? 1 : 0;
+    const localFlexParticipation = target === 'nozzle' || sameOffset(measurementOffset, nozzleOffset)
+        ? 1.0
+        : CARRIAGE_SENSOR_FLEX_PARTICIPATION;
+
+    return {
+        yawTorqueMm: torque[2],
+        yawMeasurementMm: rotationalMeasurementMm(2, measurementOffset, measurementAxis),
+        tiltTorqueMm: torque[tiltAxisIndex],
+        tiltMeasurementMm: rotationalMeasurementMm(tiltAxisIndex, measurementOffset, measurementAxis),
+        localFlexLeverMm: distanceFromActiveAxis(measurementOffset, axis),
+        localFlexParticipation
+    };
+}
+
+function lorentzianAt(f: number, centerFreq: number, width: number, amplitude: number): number {
+    return amplitude / (1.0 + Math.pow((f - centerFreq) / width, 2.0));
+}
+
 export function generate_psd_curve(center_freq: number, freqs: Float64Array | number[], imperfections: Imperfections = {}, out_psd?: Float64Array, speed?: SpeedParams, target: 'adxl' | 'nozzle' | 'base' = 'adxl'): Float64Array {
     const {
         axis = 'x',
@@ -323,76 +481,70 @@ export function generate_psd_curve(center_freq: number, freqs: Float64Array | nu
         out_psd = new Float64Array(freqs.length);
     }
 
-    // Choose which sensor offset to use for measurement
-    let sensor_offset: [number, number, number] = [0, 0, 0];
+    // Choose which physical point is being measured. Klipper recommendations
+    // use the ADXL point; nozzle analysis is an explicit diagnostic path.
+    let sensor_offset: Vec3 = [0, 0, 0];
     if (target === 'adxl' && imperfections.adxl_offset) {
         sensor_offset = imperfections.adxl_offset;
     } else if (target === 'nozzle' && imperfections.nozzle_offset) {
         sensor_offset = imperfections.nozzle_offset;
     }
+    const modeFactors = calculateToolheadModeFactors(
+        axis,
+        com_offset,
+        sensor_offset,
+        target,
+        imperfections.nozzle_offset
+    );
+    const stiffness_multiplier = toolhead_stiffness * bearing_preload;
+    const preload_damping_factor = Math.pow(bearing_preload, PRELOAD_DAMPING_EXP);
 
     for (let i = 0; i < freqs.length; i++) {
         const f = freqs[i];
         let val = 0;
         
         // 1. Main Peak (Translational)
-        val += base_amplitude / (1.0 + Math.pow((f - center_freq) / w, 2.0));
-
-        let yaw_torque: number;
-        let yaw_measurement: number;
-        let roll_pitch_torque: number;
-        let roll_pitch_measurement: number;
-
-        if (axis === 'x') {
-            // Accelerating in X.
-            // Yaw is generated by Y COM offset. Measured by Y sensor offset.
-            yaw_torque = com_offset[1];
-            yaw_measurement = sensor_offset[1];
-
-            // Roll is generated by Z COM offset. Measured by Z sensor offset.
-            roll_pitch_torque = com_offset[2];
-            roll_pitch_measurement = sensor_offset[2];
-        } else {
-            // Accelerating in Y.
-            // Yaw is generated by X COM offset. Measured by X sensor offset.
-            yaw_torque = com_offset[0];
-            yaw_measurement = sensor_offset[0];
-
-            // Pitch is generated by Z COM offset. Measured by Z sensor offset.
-            roll_pitch_torque = com_offset[2];
-            roll_pitch_measurement = sensor_offset[2];
-        }
+        val += lorentzianAt(f, center_freq, w, base_amplitude);
 
         // 2. Yaw Secondary Peak
-        if (Math.abs(yaw_torque) > 0 && Math.abs(yaw_measurement) > 0) {
-            const torque_factor = Math.abs(yaw_torque) / TORSION_NORMALIZER_MM; 
-            const measurement_factor = Math.abs(yaw_measurement) / TORSION_NORMALIZER_MM;
+        if (Math.abs(modeFactors.yawTorqueMm) > 0 && Math.abs(modeFactors.yawMeasurementMm) > 0) {
+            const torque_factor = Math.abs(modeFactors.yawTorqueMm) / TORSION_NORMALIZER_MM;
+            const measurement_factor = Math.abs(modeFactors.yawMeasurementMm) / TORSION_NORMALIZER_MM;
             const combined_factor = torque_factor * measurement_factor;
             
-            const stiffness_multiplier = toolhead_stiffness * bearing_preload;
             const freq_multiplier = Math.max(YAW_FREQ_FLOOR, YAW_FREQ_MULT * Math.sqrt(stiffness_multiplier));
             const twist_freq = center_freq * freq_multiplier;
             
-            const preload_damping_factor = Math.pow(bearing_preload, PRELOAD_DAMPING_EXP);
             const twist_amp = (base_amplitude * combined_factor * YAW_AMP_COEFF) / (stiffness_multiplier * preload_damping_factor);  
             const twist_w = twist_freq * damping_ratio * TORSION_DAMPING_WIDTH * preload_damping_factor; 
-            val += twist_amp / (1.0 + Math.pow((f - twist_freq) / twist_w, 2.0));
+            val += lorentzianAt(f, twist_freq, twist_w, twist_amp);
         }
 
         // 3. Roll/Pitch Secondary Peak
-        if (Math.abs(roll_pitch_torque) > 0 && Math.abs(roll_pitch_measurement) > 0) {
-            const torque_factor = Math.abs(roll_pitch_torque) / TORSION_NORMALIZER_MM;
-            const measurement_factor = Math.abs(roll_pitch_measurement) / TORSION_NORMALIZER_MM;
+        if (Math.abs(modeFactors.tiltTorqueMm) > 0 && Math.abs(modeFactors.tiltMeasurementMm) > 0) {
+            const torque_factor = Math.abs(modeFactors.tiltTorqueMm) / TORSION_NORMALIZER_MM;
+            const measurement_factor = Math.abs(modeFactors.tiltMeasurementMm) / TORSION_NORMALIZER_MM;
             const combined_factor = torque_factor * measurement_factor;
 
-            const stiffness_multiplier = toolhead_stiffness * bearing_preload;
             const freq_multiplier = Math.max(ROLL_PITCH_FREQ_FLOOR, ROLL_PITCH_FREQ_MULT * Math.sqrt(stiffness_multiplier));
             const rp_freq = center_freq * freq_multiplier;
             
-            const preload_damping_factor = Math.pow(bearing_preload, PRELOAD_DAMPING_EXP);
             const rp_amp = (base_amplitude * combined_factor * ROLL_PITCH_AMP_COEFF) / (stiffness_multiplier * preload_damping_factor); 
             const rp_w = rp_freq * damping_ratio * TORSION_DAMPING_WIDTH * preload_damping_factor;
-            val += rp_amp / (1.0 + Math.pow((f - rp_freq) / rp_w, 2.0));
+            val += lorentzianAt(f, rp_freq, rp_w, rp_amp);
+        }
+
+        // 4. Local measurement-point flex. This represents deformation between
+        // the carriage and nozzle/toolhead-mounted sensor, so it does not require
+        // a non-zero COM offset like rigid-body yaw/pitch/roll does.
+        if (modeFactors.localFlexLeverMm > 0 && modeFactors.localFlexParticipation > 0) {
+            const lever_factor = modeFactors.localFlexLeverMm / TORSION_NORMALIZER_MM;
+            const freq_multiplier = Math.max(LOCAL_FLEX_FREQ_FLOOR, LOCAL_FLEX_FREQ_MULT * Math.sqrt(toolhead_stiffness));
+            const flex_freq = center_freq * freq_multiplier;
+            const flex_amp = (base_amplitude * lever_factor * lever_factor * LOCAL_FLEX_AMP_COEFF * modeFactors.localFlexParticipation) /
+                (Math.pow(toolhead_stiffness, 1.25) * preload_damping_factor);
+            const flex_w = flex_freq * damping_ratio * LOCAL_FLEX_DAMPING_WIDTH * preload_damping_factor;
+            val += lorentzianAt(f, flex_freq, flex_w, flex_amp);
         }
 
         if (external_sway > 0) {
@@ -400,7 +552,7 @@ export function generate_psd_curve(center_freq: number, freqs: Float64Array | nu
             const sway_amp = base_amplitude * (external_sway / 100.0) * 0.25; 
             const broadening_factor = 1.0 + (squishy_materials / 20.0); 
             const sway_w = sway_freq * damping_ratio * (5.8 * broadening_factor); 
-            val += sway_amp / (1.0 + Math.pow((f - sway_freq) / sway_w, 2.0));
+            val += lorentzianAt(f, sway_freq, sway_w, sway_amp);
         }
 
         if (hose_drag > 0) {
@@ -408,7 +560,7 @@ export function generate_psd_curve(center_freq: number, freqs: Float64Array | nu
             const drag_amp = base_amplitude * (hose_drag / 100.0) * 0.35;
             const hose_broadening = 1.0 + (hose_squishy / 15.0);
             const drag_w = drag_freq * damping_ratio * (11.6 * hose_broadening);
-            val += drag_amp / (1.0 + Math.pow((f - drag_freq) / drag_w, 2.0));
+            val += lorentzianAt(f, drag_freq, drag_w, drag_amp);
         }
 
         if (belt_tension_delta > 0) {
@@ -416,14 +568,14 @@ export function generate_psd_curve(center_freq: number, freqs: Float64Array | nu
             const peak2_freq = center_freq * (1.0 - delta_ratio);
             const peak2_amp = base_amplitude * 0.85; 
             const peak2_w = peak2_freq * damping_ratio * 2.0;
-            val += peak2_amp / (1.0 + Math.pow((f - peak2_freq) / peak2_w, 2.0));
+            val += lorentzianAt(f, peak2_freq, peak2_w, peak2_amp);
         }
 
         if (gantry_racking > 0 && axis === 'y') {
             const racking_freq = center_freq * 1.15;
             const racking_amp = base_amplitude * (gantry_racking / 100.0) * 0.9;
             const racking_w = racking_freq * damping_ratio * 2.0;
-            val += racking_amp / (1.0 + Math.pow((f - racking_freq) / racking_w, 2.0));
+            val += lorentzianAt(f, racking_freq, racking_w, racking_amp);
         }
 
         if (speed && speed.print_speed > 0) {
@@ -431,7 +583,7 @@ export function generate_psd_curve(center_freq: number, freqs: Float64Array | nu
             const mesh_freq = v / 2.0;
             const mesh_amp = base_amplitude * (v / 2000.0) * 0.5;
             const mesh_w = mesh_freq * damping_ratio * 3.0;
-            val += mesh_amp / (1.0 + Math.pow((f - mesh_freq) / mesh_w, 2.0));
+            val += lorentzianAt(f, mesh_freq, mesh_w, mesh_amp);
         }
         
         out_psd[i] = val;

@@ -8,7 +8,7 @@ Hello, fellow AI coding assistant. This file contains critical architectural con
 - **Chart.js 4 + react-chartjs-2** — all graphs (PSD curves, step responses)
 - **@phosphor-icons/react 2.1.10** — use the `*Icon` suffix forms (e.g. `FileArrowUpIcon`); bare names are deprecated aliases
 - **Web Worker** — heavy computation runs off the main thread in `shaper.worker.ts`
-- Vanilla CSS (`index.css`, `App.css`) — no Tailwind, no CSS-in-JS
+- Vanilla CSS (`index.css`) — no Tailwind, no CSS-in-JS
 
 ## 2. File Layout
 
@@ -19,9 +19,12 @@ shaper-sim-react/src/
     Sidebar.tsx        — all sliders, selects, and section controls
     ChartDisplay.tsx   — thin Chart.js wrapper
   lib/
+    stateSanitizer.ts  — AppState/profile migration, validation, and UI-safe ranges
+    csvOverlay.ts      — Klipper CSV parser used by import UI and tests
     shaperLogic.ts     — ALL physics & math (predict_resonance, generate_psd_curve,
                          scoreShapers, generate_step_responses, shaper generators)
-    shaper.worker.ts   — Web Worker: receives AppState, calls shaperLogic, posts results back
+    shaper.worker.ts   — Web Worker: receives sanitized AppState, caches same-state
+                         simulation results, calls shaperLogic, posts results back
   types.ts             — AppState interface and defaultState
 ```
 
@@ -29,10 +32,10 @@ shaper-sim-react/src/
 
 Two message types flow through the worker:
 
-- `PSD` — fired on every slider change (debounced 0 ms via requestAnimationFrame). Returns `predX`, `predY`, `freqs`, `psdX`, `psdY`.
-- `SHAPERS` — fired separately, debounced 150 ms. Returns `scoreX`, `scoreY` (the shaper scoring results).
+- `PSD` — fired on every sanitized state change. Returns `predX`, `predY`, `freqs`, `psdX`, `psdY`, and nozzle PSDs.
+- `SHAPERS` — fired separately, debounced 600 ms for the live interactive path. Returns `scoreX`, `scoreY` (the shaper scoring results), `scoreTarget`, `scoringMode`, and the matching `psdRequestId`.
 
-The main thread never blocks on computation. Chart rendering happens in a `useMemo` that depends on `workerResult` and other UI state.
+The main thread never blocks on computation. Chart rendering happens in a `useMemo` that depends on `workerResult` and other UI state. Shaper results are only applied when their `psdRequestId` matches the latest rendered PSD generation; otherwise they are held or ignored so recommendations do not mix with stale curves.
 
 ## 4. Mathematical Gotchas (CRITICAL)
 
@@ -67,7 +70,7 @@ Never use floating-point accumulation for loop bounds in physics arrays. `for (l
 
 ### E. Snapshot State Shape
 
-`snapshotData` in `App.tsx` stores `{ psd, shapedPsd, mathFreqs, damping, targetFreq, shaperName }`. Because peak PSD scales with $Q^2$, two arrays captured at different damping ratios are not comparable. The snapshot legend label shows the captured parameters so A/B comparison is unambiguous. Do not reduce the snapshot to a loose array.
+`snapshotData` in `App.tsx` stores `{ psdX, psdY, freqs }` as cloned `Float64Array`s. Because peak PSD scales with $Q^2$, snapshots captured at different damping ratios are shape comparisons, not absolute amplitude comparisons.
 
 ### F. `scoreShapers` Signature
 
@@ -86,6 +89,15 @@ The interactive scorer intentionally uses a 2 Hz coarse pass followed by a 0.2 H
 
 The UI has two scoring modes: fast interactive scoring for live slider movement and exact Klipper-style scoring from the `Exact Klipper` button. The exact path uses exhaustive 0.2 Hz candidates and Klipper's final ZV override; use it when comparing against Klipper recommendations.
 
+Default recommendations must remain ADXL-based because that is what Klipper scores from real `calibration_data_*.csv`. The UI may run nozzle-based scoring only through the explicit `Nozzle Recs` diagnostic path. Keep nozzle scores in separate fields from `scoreX`/`scoreY`; do not silently replace Klipper recommendations with nozzle-derived ones.
+
+Speed Simulation is a visualization/operating-condition layer. The displayed PSD may shift the structural resonance lower and add a belt-mesh peak, but shaper scoring must continue to use the standstill structural PSD. High-speed motor stiffness uses supply voltage, pulley teeth, rated current, phase resistance, phase inductance, and rotor teeth from `AppState`; do not replace it with a fixed speed-knee heuristic. In the chart overlay, shapers should attenuate structural nozzle vibration while leaving speed-only belt-mesh forcing visible.
+
+Toolhead offset PSD uses two effects:
+
+- Rigid-body yaw/tilt from `r_COM x F_axis`, measured at the ADXL/nozzle point via `(alpha_mode x r_sensor) dot axis`
+- Local toolhead/nozzle flex from the carriage-to-sensor lever arm, with partial participation for carriage-mounted ADXL and full participation for nozzle/nozzle-mounted ADXL
+
 ### G. TypeScript Non-Null Assertions in `scoreShapers`
 
 `best_res` and `best_shaper_obj` are typed `| null` but TypeScript cannot see through the closure that the sweep loop always populates them. They are accessed with `!` assertions after the loops. This is intentional — do not "fix" it by making the variables optional throughout.
@@ -93,12 +105,14 @@ The UI has two scoring modes: fast interactive scoring for live slider movement 
 ## 5. Modifying the UI
 
 - All slider/select handlers call `updateState(key, value)` which is typed `(key: keyof AppState, value: number | boolean | string) => void`
+- `updateState`, saved state, and saved profiles must pass through `sanitizeAppState` / `sanitizeProfiles`; do not post unsanitized state to the worker.
 - Chart.js option literals need `as const` on union-typed fields (e.g. `position: 'top' as const`, `font: { weight: 'bold' as const }`)
 - The worker is created with `new Worker(new URL('./lib/shaper.worker.ts', import.meta.url), { type: 'module' })` — Vite handles bundling it
+- PSD mode computes all five post-shaper nozzle curves. Non-active shapers may start hidden, but their datasets must contain real points so legend toggles reveal actual curves.
 
 ## 6. CSV Overlay
 
-`parseKlipperCsv(text, filename)` in `App.tsx` handles Klipper's `calibration_data_*.csv` format (columns: `freq,psd_x,psd_y,psd_z,psd_xyz`). It prefers `psd_xyz` → `psd_x` → first `psd_*` column, and auto-detects axis from `_x_`/`_y_` in the filename.
+`parseKlipperCsv(text, filename)` in `lib/csvOverlay.ts` handles Klipper's `calibration_data_*.csv` format (columns: `freq,psd_x,psd_y,psd_z,psd_xyz`). It prefers `psd_xyz` → `psd_x` → first `psd_*` column, and auto-detects axis from `_x_`/`_y_` in the filename.
 
 CSV overlays are normalized to the simulated PSD peak at render time (`simMax / csvMax`) because the units differ (simulated: arbitrary `1e5 × Q²`; real ADXL: `(mm/s²)²/Hz`). This makes frequency shapes visually comparable without converting units.
 
