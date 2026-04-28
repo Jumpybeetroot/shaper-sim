@@ -3,3 +3,15 @@ PLAN_REVISION.md
 test.js
 MATH_REVIEW.md
 math.md
+
+# Local planning, review, sample data, and personal agent/editor guidance
+implementation_plan.md
+shaper-sim-react/shaper_sim_review.md
+resonances_x.csv
+resonances_y.csv
+shaper_calibrate_klipper.py
+.cursorrules
+.windsurfrules
+AGENT.md
+CLAUDE.md
+.github/copilot-instructions.md
