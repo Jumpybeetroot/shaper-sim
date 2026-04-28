@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import type { ReactNode } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -10,7 +11,7 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
-import type { ChartOptions, ChartData } from 'chart.js';
+import type { ChartOptions, ChartData, Plugin } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 
 ChartJS.register(
@@ -27,8 +28,8 @@ ChartJS.register(
 interface ChartDisplayProps {
   data: ChartData<'line'>;
   options: ChartOptions<'line'>;
-  plugins?: any[];
-  children?: React.ReactNode;
+  plugins?: Plugin<'line'>[];
+  children?: ReactNode;
 }
 
 export const ChartDisplay: React.FC<ChartDisplayProps> = ({ data, options, plugins, children }) => {

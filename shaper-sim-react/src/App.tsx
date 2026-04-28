@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChartDisplay } from './components/ChartDisplay';
 import { DraggableOverlay } from './components/DraggableOverlay';
@@ -6,8 +6,60 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { defaultState } from './types';
 import type { AppState } from './types';
 import { SHAPERS, DEFAULT_DAMPING_RATIO, estimate_shaper, generate_step_responses } from './lib/shaperLogic';
-import type { ShaperScore } from './lib/shaperLogic';
+import type { ShaperScore, ShaperScoringMode } from './lib/shaperLogic';
 import { Info, WarningCircle, Camera, XCircle, XCircleIcon, FileArrowUpIcon } from '@phosphor-icons/react';
+import type { ChartData, ChartOptions, Plugin, TooltipItem } from 'chart.js';
+
+type GraphMode = 'psd' | 'step';
+type ViewAxis = 'x' | 'y';
+type ChartPoint = { x: number; y: number };
+type LineChartData = ChartData<'line', ChartPoint[], unknown>;
+type ShaperScoreSet = { results: Record<string, ShaperScore>; best_shaper: string };
+type WorkerResult = {
+  predX: number;
+  predY: number;
+  compX: { belt: number; frame: number; motor: number };
+  compY: { belt: number; frame: number; motor: number };
+  freqs: Float64Array;
+  psdX: Float64Array;
+  psdY: Float64Array;
+  psdX_nozzle: Float64Array;
+  psdY_nozzle: Float64Array;
+  scoreX: ShaperScoreSet;
+  scoreY: ShaperScoreSet;
+  scoringMode: ShaperScoringMode;
+};
+type ChartPluginParams = {
+  predX: number;
+  predY: number;
+  viewAxis: ViewAxis;
+  psdX: Float64Array;
+  psdY: Float64Array;
+  graphMode: GraphMode;
+};
+type WorkerMessage =
+  | {
+      type: 'PSD';
+      requestId: number;
+      predX: number;
+      predY: number;
+      compX: { belt: number; frame: number; motor: number };
+      compY: { belt: number; frame: number; motor: number };
+      freqs: Float64Array;
+      psdX: Float64Array;
+      psdY: Float64Array;
+      psdX_nozzle: Float64Array;
+      psdY_nozzle: Float64Array;
+    }
+  | {
+      type: 'SHAPERS';
+      requestId: number;
+      scoringMode: ShaperScoringMode;
+      scoreX: ShaperScoreSet;
+      scoreY: ShaperScoreSet;
+    };
+
+const MAX_CHART_POINTS = 1200;
 
 const colors: Record<string, string> = {
   zv: '#ff3366',
@@ -37,6 +89,33 @@ interface CsvOverlay {
 }
 
 const CSV_COLORS = ['#ff9900', '#ff44aa', '#44ffcc', '#bb44ff', '#ffff44', '#44aaff'];
+
+function toChartPoints(freqs: Float64Array, values: ArrayLike<number>, maxPoints = MAX_CHART_POINTS): ChartPoint[] {
+  if (freqs.length <= maxPoints || maxPoints < 6) {
+    return Array.from(freqs, (f, i) => ({ x: f, y: values[i] }));
+  }
+
+  const targetBuckets = Math.max(1, Math.floor(maxPoints / 3));
+  const bucketSize = Math.ceil(freqs.length / targetBuckets);
+  const points: ChartPoint[] = [];
+
+  for (let start = 0; start < freqs.length; start += bucketSize) {
+    const end = Math.min(freqs.length, start + bucketSize);
+    let maxIndex = start;
+    for (let i = start + 1; i < end; i++) {
+      if (values[i] > values[maxIndex]) maxIndex = i;
+    }
+
+    for (const idx of [start, maxIndex, end - 1]) {
+      const lastPoint = points[points.length - 1];
+      if (!lastPoint || lastPoint.x !== freqs[idx]) {
+        points.push({ x: freqs[idx], y: values[idx] });
+      }
+    }
+  }
+
+  return points;
+}
 
 function parseKlipperCsv(text: string, filename: string): CsvOverlay | null {
   // Strip comment lines (Klipper raw resonance files start lines with #)
@@ -80,11 +159,32 @@ function parseKlipperCsv(text: string, filename: string): CsvOverlay | null {
   };
 }
 
+function loadSavedState(): AppState {
+  const saved = localStorage.getItem('shaperSim_state');
+  if (!saved) return defaultState;
+  try {
+    return { ...defaultState, ...JSON.parse(saved) };
+  } catch {
+    return defaultState;
+  }
+}
+
+function loadSavedProfiles(): Record<string, AppState> {
+  const saved = localStorage.getItem('shaperSim_profiles');
+  if (!saved) return {};
+  try {
+    return JSON.parse(saved);
+  } catch {
+    return {};
+  }
+}
+
 function App() {
-  const [state, setState] = useState<AppState>(defaultState);
-  const [graphMode, setGraphMode] = useState<'psd' | 'step'>('psd');
-  const [viewAxis, setViewAxis] = useState<'x' | 'y'>('x');
+  const [state, setState] = useState<AppState>(loadSavedState);
+  const [graphMode, setGraphMode] = useState<GraphMode>('psd');
+  const [viewAxis, setViewAxis] = useState<ViewAxis>('x');
   const [selectedShaper, setSelectedShaper] = useState<string>('recommended');
+  const [exactPending, setExactPending] = useState(false);
   
   const [snapshotData, setSnapshotData] = useState<{psdX: Float64Array, psdY: Float64Array, freqs: Float64Array} | null>(null);
   const [csvOverlays, setCsvOverlays] = useState<CsvOverlay[]>([]);
@@ -112,26 +212,13 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const saved = localStorage.getItem('shaperSim_state');
-    if (saved) {
-      try { setState(() => ({ ...defaultState, ...JSON.parse(saved) })); } catch (e) {}
-    }
-  }, []);
-
-  useEffect(() => {
     const handler = setTimeout(() => {
       localStorage.setItem('shaperSim_state', JSON.stringify(state));
     }, 300);
     return () => clearTimeout(handler);
   }, [state]);
 
-  const [profiles, setProfiles] = useState<Record<string, AppState>>(() => {
-    const saved = localStorage.getItem('shaperSim_profiles');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { return {}; }
-    }
-    return {};
-  });
+  const [profiles, setProfiles] = useState<Record<string, AppState>>(loadSavedProfiles);
 
   const saveProfile = useCallback((name: string) => {
     setProfiles(prev => {
@@ -170,27 +257,18 @@ function App() {
     }
   }, []);
 
-  const [workerResult, setWorkerResult] = useState<{
-    predX: number;
-    predY: number;
-    compX: { belt: number; frame: number; motor: number };
-    compY: { belt: number; frame: number; motor: number };
-    freqs: Float64Array;
-    psdX: Float64Array;
-    psdY: Float64Array;
-    psdX_nozzle: Float64Array;
-    psdY_nozzle: Float64Array;
-    scoreX: { results: Record<string, ShaperScore>; best_shaper: string };
-    scoreY: { results: Record<string, ShaperScore>; best_shaper: string };
-  } | null>(null);
+  const [workerResult, setWorkerResult] = useState<WorkerResult | null>(null);
 
   const workerRef = useRef<Worker | null>(null);
+  const psdRequestIdRef = useRef(0);
+  const shaperRequestIdRef = useRef(0);
 
   useEffect(() => {
     workerRef.current = new Worker(new URL('./lib/shaper.worker.ts', import.meta.url), { type: 'module' });
-    workerRef.current.onmessage = (e) => {
+    workerRef.current.onmessage = (e: MessageEvent<WorkerMessage>) => {
       const data = e.data;
       if (data.type === 'PSD') {
+        if (data.requestId !== psdRequestIdRef.current) return;
         setWorkerResult(prev => ({
           ...prev,
           predX: data.predX,
@@ -203,15 +281,19 @@ function App() {
           psdX_nozzle: data.psdX_nozzle,
           psdY_nozzle: data.psdY_nozzle,
           scoreX: prev?.scoreX || { results: {}, best_shaper: '' },
-          scoreY: prev?.scoreY || { results: {}, best_shaper: '' }
+          scoreY: prev?.scoreY || { results: {}, best_shaper: '' },
+          scoringMode: prev?.scoringMode || 'interactive'
         }));
       } else if (data.type === 'SHAPERS') {
+        if (data.requestId !== shaperRequestIdRef.current) return;
+        setExactPending(false);
         setWorkerResult(prev => {
           if (!prev) return null;
           return {
             ...prev,
             scoreX: data.scoreX,
-            scoreY: data.scoreY
+            scoreY: data.scoreY,
+            scoringMode: data.scoringMode
           };
         });
       }
@@ -236,23 +318,36 @@ function App() {
   // Instant PSD update for smooth graph interaction
   useEffect(() => {
     if (workerRef.current) {
-      workerRef.current.postMessage({ type: 'PSD', state: getSafeState() });
+      const requestId = ++psdRequestIdRef.current;
+      shaperRequestIdRef.current += 1;
+      setExactPending(false);
+      workerRef.current.postMessage({ type: 'PSD', requestId, state: getSafeState() });
     }
   }, [getSafeState]);
 
-  // Debounced SHAPERS update for heavy math
+  // Debounced SHAPERS update for heavy math. Keep this long enough that
+  // slider drags update PSD immediately without queueing repeated rescoring.
   useEffect(() => {
     if (workerRef.current) {
       const handler = setTimeout(() => {
-        workerRef.current?.postMessage({ type: 'SHAPERS', state: getSafeState() });
-      }, 150);
+        const requestId = ++shaperRequestIdRef.current;
+        setExactPending(false);
+        workerRef.current?.postMessage({ type: 'SHAPERS', requestId, state: getSafeState(), scoringMode: 'interactive' });
+      }, 600);
       return () => clearTimeout(handler);
     }
   }, [getSafeState]);
 
-  const { predX = 0, predY = 0, compX = { belt: 0, frame: 0, motor: 0 }, compY = { belt: 0, frame: 0, motor: 0 }, freqs = new Float64Array(0), psdX = new Float64Array(0), psdY = new Float64Array(0), psdX_nozzle = new Float64Array(0), psdY_nozzle = new Float64Array(0), scoreX = { results: {}, best_shaper: '' }, scoreY = { results: {}, best_shaper: '' } } = workerResult || {};
+  const runExactScoring = useCallback(() => {
+    if (!workerRef.current) return;
+    const requestId = ++shaperRequestIdRef.current;
+    setExactPending(true);
+    workerRef.current.postMessage({ type: 'SHAPERS', requestId, state: getSafeState(), scoringMode: 'exact' });
+  }, [getSafeState]);
 
-  const chartData = useMemo(() => {
+  const { predX = 0, predY = 0, compX = { belt: 0, frame: 0, motor: 0 }, compY = { belt: 0, frame: 0, motor: 0 }, freqs = new Float64Array(0), psdX = new Float64Array(0), psdY = new Float64Array(0), psdX_nozzle = new Float64Array(0), psdY_nozzle = new Float64Array(0), scoreX = { results: {}, best_shaper: '' }, scoreY = { results: {}, best_shaper: '' }, scoringMode = 'interactive' } = workerResult || {};
+
+  const chartData = useMemo<LineChartData>(() => {
     if (!workerResult) return { labels: [], datasets: [] };
     const centerFreq = viewAxis === 'x' ? predX : predY;
     const psd = viewAxis === 'x' ? psdX : psdY;
@@ -268,7 +363,7 @@ function App() {
       const { times, unshaped, shaped: shapedResponse } = generate_step_responses(centerFreq, state.dampingRatio, shaper, 0.250, 0.0005);
       const timeMs = Array.from(times, t => t * 1000);
 
-      const datasets = [
+      const datasets: LineChartData['datasets'] = [
         {
           label: 'Unshaped Step Response',
           data: timeMs.map((t, i) => ({ x: t, y: unshaped[i] })),
@@ -292,10 +387,10 @@ function App() {
 
       return { labels: [], datasets };
     } else {
-      const datasets: any[] = [
+      const datasets: LineChartData['datasets'] = [
         {
           label: `ADXL PSD (${viewAxis.toUpperCase()})`,
-          data: Array.from(freqs).map((f, i) => ({ x: f, y: psd[i] })),
+          data: toChartPoints(freqs, psd),
           borderColor: 'rgba(255, 255, 255, 0.4)',
           backgroundColor: 'rgba(255, 255, 255, 0.05)',
           fill: true,
@@ -305,7 +400,7 @@ function App() {
         },
         {
           label: `Actual Nozzle PSD (${viewAxis.toUpperCase()})`,
-          data: Array.from(freqs).map((f, i) => ({ x: f, y: psdNozzle[i] })),
+          data: toChartPoints(freqs, psdNozzle),
           borderColor: '#ffffff',
           fill: false,
           pointRadius: 0,
@@ -317,7 +412,7 @@ function App() {
         const snapPsd = viewAxis === 'x' ? snapshotData.psdX : snapshotData.psdY;
         datasets.push({
           label: `Snapshot (${viewAxis.toUpperCase()})`,
-          data: Array.from(snapshotData.freqs).map((f, i) => ({ x: f, y: snapPsd[i] })),
+          data: toChartPoints(snapshotData.freqs, snapPsd),
           borderColor: '#888888',
           borderWidth: 1.5,
           borderDash: [5, 5],
@@ -337,9 +432,11 @@ function App() {
           let csvMax = 0;
           for (let i = 0; i < overlay.psd.length; i++) if (overlay.psd[i] > csvMax) csvMax = overlay.psd[i];
           const scale = simMax > 0 && csvMax > 0 ? simMax / csvMax : 1;
+          const scaledPsd = new Float64Array(overlay.psd.length);
+          for (let i = 0; i < overlay.psd.length; i++) scaledPsd[i] = overlay.psd[i] * scale;
           datasets.push({
             label: overlay.label,
-            data: Array.from(overlay.freqs, (f, i) => ({ x: f, y: overlay.psd[i] * scale })),
+            data: toChartPoints(overlay.freqs, scaledPsd),
             borderColor: CSV_COLORS[idx % CSV_COLORS.length],
             borderWidth: 2,
             borderDash: [],
@@ -374,7 +471,7 @@ function App() {
         
         datasets.push({
           label: `After shaper (${shaperNames[shaperName]}) — nozzle`,
-          data: Array.from(freqs).map((f, i) => ({ x: f, y: smoothedPsd[i] })),
+          data: toChartPoints(freqs, smoothedPsd),
           borderColor: '#00ffff',
           borderWidth: 2,
           borderDash: [5, 5],
@@ -385,9 +482,26 @@ function App() {
 
       return { labels: [], datasets };
     }
-  }, [state.dampingRatio, workerResult, graphMode, selectedShaper, viewAxis, snapshotData, csvOverlays]);
+  }, [
+    state.dampingRatio,
+    workerResult,
+    graphMode,
+    selectedShaper,
+    viewAxis,
+    snapshotData,
+    csvOverlays,
+    predX,
+    predY,
+    psdX,
+    psdY,
+    psdX_nozzle,
+    psdY_nozzle,
+    scoreX,
+    scoreY,
+    freqs
+  ]);
 
-  const chartOptions = useMemo(() => {
+  const chartOptions = useMemo<ChartOptions<'line'>>(() => {
     const isStep = graphMode === 'step';
     
     // Calculate Matplotlib-style scientific exponent for the Y-axis
@@ -406,6 +520,8 @@ function App() {
     return {
       responsive: true,
       maintainAspectRatio: false,
+      parsing: false,
+      normalized: true,
       animation: { duration: 0 },
       interaction: {
         mode: 'index' as const,
@@ -423,8 +539,9 @@ function App() {
         },
         tooltip: {
           callbacks: {
-            label: function(context: any) {
+            label: function(context: TooltipItem<'line'>) {
               const yVal = context.parsed.y;
+              if (yVal === null) return `${context.dataset.label}: n/a`;
               if (isStep) return `${context.dataset.label}: ${yVal.toFixed(3)}`;
               return `${context.dataset.label}: ${yVal.toExponential(2)}`;
             }
@@ -449,12 +566,14 @@ function App() {
           grid: { color: 'rgba(255, 255, 255, 0.05)' },
           ticks: {
             color: 'rgba(255, 255, 255, 0.7)',
-            callback: function(value: any) {
-              if (isStep) return value.toFixed(2);
-              if (value === 0) return '0.0';
+            callback: function(value: string | number) {
+              const numericValue = typeof value === 'number' ? value : Number(value);
+              if (!Number.isFinite(numericValue)) return String(value);
+              if (isStep) return numericValue.toFixed(2);
+              if (numericValue === 0) return '0.0';
               
               // Matplotlib style: value divided by the global axis exponent
-              return (value / Math.pow(10, psdExponent)).toFixed(1);
+              return (numericValue / Math.pow(10, psdExponent)).toFixed(1);
             }
           }
         }
@@ -462,13 +581,15 @@ function App() {
     };
   }, [state.maxX, graphMode, viewAxis, psdX, psdY]);
 
-  const chartParamsRef = useRef({ predX, predY, viewAxis, psdX, psdY, graphMode });
-  chartParamsRef.current = { predX, predY, viewAxis, psdX, psdY, graphMode };
+  const chartParamsRef = useRef<ChartPluginParams>({ predX, predY, viewAxis, psdX, psdY, graphMode });
+  useLayoutEffect(() => {
+    chartParamsRef.current = { predX, predY, viewAxis, psdX, psdY, graphMode };
+  }, [predX, predY, viewAxis, psdX, psdY, graphMode]);
 
-  const plugins = useMemo(() => {
+  const plugins = useMemo<Plugin<'line'>[]>(() => {
     return [{
       id: 'verticalLines',
-      beforeDraw: (chart: any) => {
+      beforeDraw: (chart) => {
         const { predX, predY, viewAxis, psdX, psdY, graphMode } = chartParamsRef.current;
         if (graphMode === 'step') return;
         const ctx = chart.ctx;
@@ -530,13 +651,16 @@ function App() {
         drawHorizontalLine(threshold, 'rgba(255, 60, 60, 0.6)', 'Vibration Threshold');
       }
     }];
-  }, [predX, predY, viewAxis, graphMode, psdX, psdY]);
+  }, []);
 
   const klipperConsoleOutput = useMemo(() => {
     if (!workerResult || !scoreX.best_shaper || !scoreY.best_shaper) return 'Calculating shaper recommendations...';
     const displayAccel = (a: number) => Math.round(a / 100.0) * 100.0;
+    const modeLabel = scoringMode === 'exact'
+      ? 'Exact Klipper-style exhaustive scan'
+      : 'Fast interactive scan';
     
-    let out = `Calculating shaper recommendations based on ADXL PSD (Klipper-compatible).\nThe 'After shaper' graph overlay shows predicted nozzle vibration after shaping.\n\n`;
+    let out = `${modeLabel} based on ADXL PSD.\nThe 'After shaper' graph overlay shows predicted nozzle vibration after shaping.\n\n`;
     out += `========== X AXIS (${predX.toFixed(1)} Hz) ==========\n`;
     for (const s of Object.keys(shaperNames)) {
         const r = scoreX.results[s];
@@ -556,7 +680,7 @@ function App() {
     out += `\nRecommended shaper is ${scoreY.best_shaper} @ ${recY.freq.toFixed(1)} Hz (Max Accel: ${displayAccel(recY.max_accel)} mm/s²)\n`;
     
     return out;
-  }, [predX, predY, scoreX, scoreY]);
+  }, [workerResult, predX, predY, scoreX, scoreY, scoringMode]);
 
   return (
     <div className="app-container">
@@ -622,9 +746,20 @@ function App() {
               ))}
             </div>
 
+            <div className="toggle-group small-padding">
+              <button
+                className="nav-btn nav-btn-snapshot"
+                onClick={runExactScoring}
+                disabled={exactPending}
+                title="Run exhaustive Klipper-style shaper scan"
+              >
+                <WarningCircle weight="bold" /> {exactPending ? 'Exact...' : 'Exact Klipper'}
+              </button>
+            </div>
+
             <div className="toggle-group">
               <span className="toggle-label">Graph Mode:</span>
-              <select className="toggle-select" value={graphMode} onChange={e => setGraphMode(e.target.value as any)}>
+              <select className="toggle-select" value={graphMode} onChange={e => setGraphMode(e.target.value as GraphMode)}>
                 <option value="psd">Frequency (PSD)</option>
                 <option value="step">Time (Step Response)</option>
               </select>
@@ -646,7 +781,7 @@ function App() {
 
             <div className="toggle-group">
               <span className="toggle-label">View Axis:</span>
-              <select className="toggle-select" value={viewAxis} onChange={e => setViewAxis(e.target.value as 'x'|'y')}>
+              <select className="toggle-select" value={viewAxis} onChange={e => setViewAxis(e.target.value as ViewAxis)}>
                 <option value="x">X Axis</option>
                 <option value="y">Y Axis</option>
               </select>

@@ -1,9 +1,17 @@
-import { predict_resonance, generate_psd_curve, scoreShapers } from './shaperLogic';
+import { predict_resonance, generate_psd_curve, scoreShapers, scoreShapersExact } from './shaperLogic';
 import { getBeltDensity, getBeltTensionN } from './beltUtils';
 import type { AppState } from '../types';
+import type { ShaperScoringMode } from './shaperLogic';
 
-self.onmessage = (e: MessageEvent<{type: string, state: AppState}>) => {
-    const { type, state } = e.data;
+interface WorkerRequest {
+    type: 'PSD' | 'SHAPERS';
+    requestId: number;
+    state: AppState;
+    scoringMode?: ShaperScoringMode;
+}
+
+self.onmessage = (e: MessageEvent<WorkerRequest>) => {
+    const { type, requestId, state } = e.data;
 
     const beltDensity = getBeltDensity(state.beltType);
     const tensionN = getBeltTensionN(state.beltType, state.beltTune);
@@ -86,6 +94,7 @@ self.onmessage = (e: MessageEvent<{type: string, state: AppState}>) => {
         // detached (zero-length), corrupting subsequent scoreShapers() calls.
         self.postMessage({
             type: 'PSD',
+            requestId,
             predX,
             predY,
             compX,
@@ -100,11 +109,15 @@ self.onmessage = (e: MessageEvent<{type: string, state: AppState}>) => {
     }
 
     if (type === 'SHAPERS') {
-        const scoreX = scoreShapers(psdX_adxl, freqs, safeMaxX, state.scv);
-        const scoreY = scoreShapers(psdY_adxl, freqs, safeMaxX, state.scv);
+        const scoringMode = e.data.scoringMode === 'exact' ? 'exact' : 'interactive';
+        const scorer = scoringMode === 'exact' ? scoreShapersExact : scoreShapers;
+        const scoreX = scorer(psdX_adxl, freqs, safeMaxX, state.scv);
+        const scoreY = scorer(psdY_adxl, freqs, safeMaxX, state.scv);
         
         self.postMessage({
             type: 'SHAPERS',
+            requestId,
+            scoringMode,
             scoreX,
             scoreY
         });

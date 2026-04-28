@@ -13,6 +13,17 @@
 export const SHAPER_VIBRATION_REDUCTION = 20.0;
 export const DEFAULT_DAMPING_RATIO = 0.1;
 export const KLIPPER_TARGET_SMOOTHING = 0.12;
+export const SHAPER_COARSE_STEP_HZ = 2.0;
+export const SHAPER_FINE_STEP_HZ = 0.2;
+export const SHAPER_FINE_WINDOW_HZ = 2.0;
+export const TEST_DAMPING_RATIOS = [0.075, 0.1, 0.15] as const;
+export const SHAPER_MIN_FREQS: Record<string, number> = {
+    zv: 21.0,
+    mzv: 23.0,
+    ei: 29.0,
+    '2hump_ei': 39.0,
+    '3hump_ei': 48.0
+};
 
 // --- Torsion Model Tuning Constants --- //
 // Normalizer distance (mm) — calibrated so a Stealthburner at COM_Y=20, sensor_Y=45
@@ -327,10 +338,10 @@ export function generate_psd_curve(center_freq: number, freqs: Float64Array | nu
         // 1. Main Peak (Translational)
         val += base_amplitude / (1.0 + Math.pow((f - center_freq) / w, 2.0));
 
-        let yaw_torque = 0;
-        let yaw_measurement = 0;
-        let roll_pitch_torque = 0;
-        let roll_pitch_measurement = 0;
+        let yaw_torque: number;
+        let yaw_measurement: number;
+        let roll_pitch_torque: number;
+        let roll_pitch_measurement: number;
 
         if (axis === 'x') {
             // Accelerating in X.
@@ -526,35 +537,126 @@ export interface ShaperScore {
     freq: number;
 }
 
-export function scoreShapers(rawPsd: Float64Array | number[], freqs: Float64Array | number[], max_hz: number, scv: number): { results: Record<string, ShaperScore>, best_shaper: string } {
-    let best_shaper = '';
-    let best_shaper_obj: ShaperScore & { name: string, score: number } | null = null;
-    let all_shapers: (ShaperScore & { name: string, score: number })[] = [];
-    let results: Record<string, ShaperScore> = {};
+export type ShaperScoringMode = 'interactive' | 'exact';
 
-    // Memoize the frequency math once for all shaper iterations
-    const mathMemo = {
+interface ShaperCandidate {
+    max_accel: number;
+    vibrs: number;
+    smoothing: number;
+    freq: number;
+    score: number;
+}
+
+type InternalShaperScore = ShaperScore & {
+    name: string;
+    score: number;
+    vibrs: number;
+};
+
+function buildMathMemo(freqs: Float64Array | number[], damping_ratio: number) {
+    const df = Math.sqrt(1.0 - damping_ratio * damping_ratio);
+    const memo = {
         omega: new Float64Array(freqs.length),
         damping: new Float64Array(freqs.length),
         omega_d: new Float64Array(freqs.length),
         length: freqs.length
     };
-    const df = Math.sqrt(1.0 - DEFAULT_DAMPING_RATIO * DEFAULT_DAMPING_RATIO);
     for (let k = 0; k < freqs.length; k++) {
-        mathMemo.omega[k] = 2.0 * Math.PI * (freqs[k] as number);
-        mathMemo.damping[k] = DEFAULT_DAMPING_RATIO * mathMemo.omega[k];
-        mathMemo.omega_d[k] = mathMemo.omega[k] * df;
+        memo.omega[k] = 2.0 * Math.PI * (freqs[k] as number);
+        memo.damping[k] = damping_ratio * memo.omega[k];
+        memo.omega_d[k] = memo.omega[k] * df;
     }
+    return memo;
+}
 
+function isScoreBetter(candidate: ShaperCandidate, selected: ShaperCandidate): boolean {
+    const eps = 1e-12;
+    return candidate.score < selected.score - eps ||
+        (Math.abs(candidate.score - selected.score) <= eps && candidate.freq > selected.freq);
+}
+
+function isVibrationBetter(candidate: ShaperCandidate, selected: ShaperCandidate): boolean {
+    const eps = 1e-12;
+    return candidate.vibrs < selected.vibrs - eps ||
+        (Math.abs(candidate.vibrs - selected.vibrs) <= eps && candidate.freq > selected.freq);
+}
+
+function toInternalScore(name: string, candidate: ShaperCandidate): InternalShaperScore {
+    return {
+        max_accel: candidate.max_accel,
+        vibrations: candidate.vibrs * 100.0,
+        vibrs: candidate.vibrs,
+        smoothing: candidate.smoothing,
+        freq: candidate.freq,
+        score: candidate.score,
+        name
+    };
+}
+
+function addFrequencyCandidate(candidates: number[], seen: Set<string>, freq: number): void {
+    const rounded = Math.round(freq * 10.0) / 10.0;
+    const key = rounded.toFixed(1);
+    if (!seen.has(key)) {
+        seen.add(key);
+        candidates.push(rounded);
+    }
+}
+
+function buildInteractiveShaperFreqs(minFreq: number, maxHz: number): number[] {
+    const startFreq = maxHz >= minFreq ? minFreq : Math.max(SHAPER_FINE_STEP_HZ, maxHz);
+    const candidates: number[] = [];
+    const seen = new Set<string>();
+
+    addFrequencyCandidate(candidates, seen, maxHz);
+    const coarseSteps = Math.max(0, Math.floor((maxHz - startFreq) / SHAPER_COARSE_STEP_HZ + 1e-9));
+    for (let i = coarseSteps; i >= 0; i--) {
+        addFrequencyCandidate(candidates, seen, startFreq + i * SHAPER_COARSE_STEP_HZ);
+    }
+    return candidates.sort((a, b) => b - a);
+}
+
+function addFineShaperFreqs(candidates: number[], seen: Set<string>, centerFreq: number, minFreq: number, maxHz: number): void {
+    const fineMin = Math.max(minFreq, centerFreq - SHAPER_FINE_WINDOW_HZ);
+    const fineMax = Math.min(maxHz, centerFreq + SHAPER_FINE_WINDOW_HZ);
+    const steps = Math.max(0, Math.floor((fineMax - fineMin) / SHAPER_FINE_STEP_HZ + 1e-9));
+    for (let i = steps; i >= 0; i--) {
+        addFrequencyCandidate(candidates, seen, fineMin + i * SHAPER_FINE_STEP_HZ);
+    }
+}
+
+function buildExactShaperFreqs(minFreq: number, maxHz: number): number[] {
+    const startFreq = maxHz >= minFreq ? minFreq : Math.max(SHAPER_FINE_STEP_HZ, maxHz);
+    const candidates: number[] = [];
+    const seen = new Set<string>();
+    const steps = Math.max(0, Math.floor((maxHz - startFreq) / SHAPER_FINE_STEP_HZ + 1e-9));
+    for (let i = steps; i >= 0; i--) {
+        addFrequencyCandidate(candidates, seen, startFreq + i * SHAPER_FINE_STEP_HZ);
+    }
+    return candidates;
+}
+
+function scoreShapersWithMode(rawPsd: Float64Array | number[], freqs: Float64Array | number[], max_hz: number, scv: number, mode: ShaperScoringMode): { results: Record<string, ShaperScore>, best_shaper: string } {
+    let best_shaper = '';
+    let best_shaper_obj: InternalShaperScore | null = null;
+    const all_shapers: InternalShaperScore[] = [];
+    const results: Record<string, ShaperScore> = {};
+
+    const mathMemos = TEST_DAMPING_RATIOS.map((dr) => buildMathMemo(freqs, dr));
     const valsBuffer = new Float64Array(freqs.length);
 
     for (const s of Object.keys(SHAPERS)) {
-        let best_res: { freq: number, vibrs: number, smoothing: number, score: number, max_accel: number } | null = null;
-        const test_results: { freq: number, vibrs: number, smoothing: number, score: number, max_accel: number }[] = [];
+        let best_res: ShaperCandidate | null = null;
+        const test_results: ShaperCandidate[] = [];
 
         const testFreq = (f_test: number) => {
             const shaper = SHAPERS[s](f_test, DEFAULT_DAMPING_RATIO);
-            const { fraction } = estimate_remaining_vibrations(shaper, DEFAULT_DAMPING_RATIO, freqs, rawPsd, mathMemo, valsBuffer);
+            let fraction = 0.0;
+            for (let i = 0; i < TEST_DAMPING_RATIOS.length; i++) {
+                const res = estimate_remaining_vibrations(
+                    shaper, TEST_DAMPING_RATIOS[i], freqs, rawPsd, mathMemos[i], valsBuffer
+                );
+                if (res.fraction > fraction) fraction = res.fraction;
+            }
             const max_accel = find_shaper_max_accel(shaper, scv);
             const smoothing = get_shaper_smoothing(shaper, 5000, scv);
             
@@ -564,61 +666,73 @@ export function scoreShapers(rawPsd: Float64Array | number[], freqs: Float64Arra
             const res = { freq: f_test, vibrs: fraction, smoothing, score: shaper_score, max_accel };
             test_results.push(res);
             
-            if (!best_res || res.vibrs < best_res.vibrs) {
+            if (!best_res || isVibrationBetter(res, best_res)) {
                 best_res = res;
             }
         };
         
-        // Pass 1: Coarse sweep (2.0 Hz steps) to find the absolute minimum vibration pocket
-        for (let f_test = 10.0; f_test <= max_hz; f_test += 2.0) {
-            testFreq(f_test);
+        const minFreq = Math.min(SHAPER_MIN_FREQS[s] ?? 10.0, max_hz);
+        if (mode === 'exact') {
+            for (const f_test of buildExactShaperFreqs(minFreq, max_hz)) {
+                testFreq(f_test);
+            }
+        } else {
+            const candidateFreqs = buildInteractiveShaperFreqs(minFreq, max_hz);
+            const seenFreqs = new Set(candidateFreqs.map((freq) => freq.toFixed(1)));
+            for (const f_test of candidateFreqs) {
+                testFreq(f_test);
+            }
+            addFineShaperFreqs(candidateFreqs, seenFreqs, best_res!.freq, minFreq, max_hz);
+            for (const f_test of candidateFreqs.sort((a, b) => b - a)) {
+                if (!test_results.some((res) => Math.abs(res.freq - f_test) < 1e-9)) {
+                    testFreq(f_test);
+                }
+            }
         }
-
-        // Pass 2: Fine sweep (+/- 2.0 Hz around coarse best_res, 0.2 Hz steps)
-        const coarse_best = best_res!.freq;
-        const fine_min = Math.max(10.0, coarse_best - 2.0);
-        const fine_max = Math.min(max_hz, coarse_best + 2.0);
-        for (let f_test = fine_min; f_test <= fine_max; f_test += 0.2) {
-            testFreq(f_test);
-        }
-
-        // Sort ascending by frequency to match Klipper's evaluation order (lowest to highest)
-        test_results.sort((a, b) => a.freq - b.freq);
 
         let selected = best_res!;
-        for (let i = 0; i < test_results.length; i++) {
+        for (let i = test_results.length - 1; i >= 0; i--) {
             const res = test_results[i];
-            if (res.vibrs < best_res!.vibrs * 1.1 + 0.0005 && res.score < selected.score) {
+            if (res.vibrs < best_res!.vibrs * 1.1 + 0.0005 && isScoreBetter(res, selected)) {
                 selected = res;
             }
         }
 
-        const final_shaper_result = {
-            max_accel: selected.max_accel,
-            vibrations: selected.vibrs * 100.0,
-            smoothing: selected.smoothing,
-            freq: selected.freq,
-            score: selected.score,
-            name: s
-        };
+        let final_shaper_result = toInternalScore(s, selected);
         
-        results[s] = final_shaper_result;
-        all_shapers.push(final_shaper_result);
-
         // Klipper's empirical shaper selection logic
         if (!best_shaper_obj || final_shaper_result.score * 1.2 < best_shaper_obj.score ||
             (final_shaper_result.score * 1.05 < best_shaper_obj.score && final_shaper_result.smoothing * 1.1 < best_shaper_obj.smoothing)) {
             best_shaper_obj = final_shaper_result;
             best_shaper = s;
         }
+
+        // Klipper can still pick another fitted frequency if it improves both
+        // vibration and smoothing against the current global best shaper.
+        if (best_shaper_obj) {
+            for (let i = test_results.length - 1; i >= 0; i--) {
+                const res = test_results[i];
+                if (res.vibrs < best_shaper_obj.vibrs && res.smoothing < best_shaper_obj.smoothing) {
+                    final_shaper_result = toInternalScore(s, res);
+                    best_shaper_obj = final_shaper_result;
+                    best_shaper = s;
+                }
+            }
+        }
+
+        results[s] = final_shaper_result;
+        all_shapers.push(final_shaper_result);
     }
 
     // Klipper's final override: If ZV is selected but another shaper has >10% better vibration reduction, use it instead.
     if (best_shaper === 'zv') {
         for (const tuned_shaper of all_shapers) {
-            if (tuned_shaper.name !== 'zv' && tuned_shaper.vibrations * 1.1 < best_shaper_obj!.vibrations) {
+            const hasBetterVibrations = tuned_shaper.name !== 'zv' && tuned_shaper.vibrs * 1.1 < best_shaper_obj!.vibrs;
+            const shouldOverride = mode === 'exact'
+                ? hasBetterVibrations
+                : hasBetterVibrations && tuned_shaper.score * 1.2 < best_shaper_obj!.score;
+            if (shouldOverride) {
                 best_shaper = tuned_shaper.name;
-                best_shaper_obj = tuned_shaper;
                 break;
             }
         }
@@ -635,4 +749,12 @@ export function scoreShapers(rawPsd: Float64Array | number[], freqs: Float64Arra
         }
     }
     return { results, best_shaper };
+}
+
+export function scoreShapers(rawPsd: Float64Array | number[], freqs: Float64Array | number[], max_hz: number, scv: number): { results: Record<string, ShaperScore>, best_shaper: string } {
+    return scoreShapersWithMode(rawPsd, freqs, max_hz, scv, 'interactive');
+}
+
+export function scoreShapersExact(rawPsd: Float64Array | number[], freqs: Float64Array | number[], max_hz: number, scv: number): { results: Record<string, ShaperScore>, best_shaper: string } {
+    return scoreShapersWithMode(rawPsd, freqs, max_hz, scv, 'exact');
 }

@@ -43,6 +43,7 @@ The main thread never blocks on computation. Chart rendering happens in a `useMe
 Klipper always uses `DEFAULT_DAMPING_RATIO = 0.1` when scoring shapers, regardless of the user's measured damping. The simulator matches this:
 
 - **Shaper construction** (`SHAPERS[s](freq, DEFAULT_DAMPING_RATIO)`) — always uses 0.1, matching what Klipper would actually deploy
+- **Shaper scoring evaluation** (`estimate_remaining_vibrations`) — pessimizes remaining vibration over Klipper's `[0.075, 0.1, 0.15]` test damping ratios
 - **`estimate_shaper` evaluation** (what the chart draws) — uses `state.dampingRatio` (the user's slider) so the visual response is meaningful
 - **`generate_psd_curve`** — uses `state.dampingRatio`
 
@@ -79,7 +80,11 @@ export function scoreShapers(
 ): { results: Record<string, ShaperScore>, best_shaper: string }
 ```
 
-The function hardcodes `DEFAULT_DAMPING_RATIO` internally throughout — it does not accept a damping parameter. Do not add one; this is the Klipper-compatible design.
+The function does not accept a user damping parameter. It constructs shapers at `DEFAULT_DAMPING_RATIO` and evaluates remaining vibration over Klipper's fixed test damping ratios. Do not wire the UI damping slider into scoring.
+
+The interactive scorer intentionally uses a 2 Hz coarse pass followed by a 0.2 Hz fine pass around the best vibration pocket. Do not replace it with an exhaustive 0.2 Hz scan on the live UI path without adding a separate idle/background mode; the exhaustive scan makes slider movement lag badly at high `maxX`.
+
+The UI has two scoring modes: fast interactive scoring for live slider movement and exact Klipper-style scoring from the `Exact Klipper` button. The exact path uses exhaustive 0.2 Hz candidates and Klipper's final ZV override; use it when comparing against Klipper recommendations.
 
 ### G. TypeScript Non-Null Assertions in `scoreShapers`
 

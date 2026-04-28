@@ -36,7 +36,9 @@ $$T = 4 \cdot \rho \cdot L^2 \cdot f^2$$
 
 Where $\rho$ is the linear density of the belt (e.g. 0.0084 kg/m for 6 mm GT2) and $L = 0.15$ m for the standard 150 mm test span.
 
-The simulator converts this tension into a belt spring constant. Over-tensioning yields diminishing stiffness returns while increasing motor bearing load.
+The simulator converts this tension into a belt spring constant using the separate user-entered A/B belt path length (`beltLength`). The 150 mm span is only for pluck-frequency tension conversion. Over-tensioning yields diminishing stiffness returns while increasing motor bearing load.
+
+The non-linear tension response is modeled as **hyperelastic strain-stiffening**: at low load the elastomer matrix stretches easily, while at higher load the internal fiberglass/Kevlar cords align and dominate the effective modulus.
 
 ### AWD Belt Segment Isolation (2WD vs AWD)
 
@@ -48,9 +50,9 @@ $$K_{belt,2WD} = \frac{8 \cdot EA}{L}$$
 
 $$K_{belt,AWD} \approx 2.8 \times K_{belt,2WD}$$
 
-AWD also doubles the motor count, doubling the total magnetic spring stiffness. Combined, these effects produce the 60–80% higher resonance frequencies observed on AWD builds.
+AWD also doubles the motor count, doubling the total magnetic spring stiffness. The 2.8 factor is lower than an idealized 4.0× because the belt is only one spring in a series system; once the belt is stiffened, gantry structure, motor mounts, shafts, and idler bearings absorb more of the remaining compliance. Combined, these effects produce the 60–80% higher resonance frequencies observed on AWD builds.
 
-**Rotor mass decoupling:** Extra motor rotors add mass, but the rotor sits behind the belt spring (separated by pulley tooth meshing compliance and motor mount elasticity), so the toolhead only feels a fraction of each rotor's effective linear mass. The simulator uses empirical coupling factors of **15% for 2WD** and **10% for AWD**.
+**Rotor mass decoupling:** Extra motor rotors add mass, but the rotor sits behind the belt spring (separated by pulley tooth meshing compliance and motor mount elasticity), so the toolhead only feels a fraction of each rotor's effective linear mass. The simulator uses modal mass participation factors of **15% for 2WD** and **10% for AWD**.
 
 ---
 
@@ -79,7 +81,13 @@ This separation is intentional. Klipper's scoring is designed around the 0.1 ref
 
 The stepper motor rotor is held by a magnetic field that acts as a torsional spring:
 
-$$K_{magnetic} \approx \frac{\text{Holding Torque} \times \text{Current\%}}{\text{Step Angle}}$$
+$$\tau(\theta) \approx \tau_{max}\sin(N_r\theta)$$
+
+For small angular vibration around equilibrium:
+
+$$K_{magnetic} = \frac{d\tau}{d\theta}\Big|_{\theta=0} = \tau_{max}N_r$$
+
+For a standard 1.8 degree hybrid stepper, $N_r = 50$ rotor teeth, so multiplying torque by rotor teeth is the analytical small-angle stiffness. It is not an empirical replacement for dividing by the full step angle.
 
 ### Speed Simulation & Belt Meshing
 
@@ -102,15 +110,15 @@ During a real print at high speed, two dynamic effects occur:
 
 The simulator ports Klipper's exact post-processing math from `shaper_calibrate.py`:
 
-1. **PSD generation:** `generate_psd_curve()` produces a Lorentzian peak centered on the predicted resonance frequency. Width = `center_freq * damping_ratio` (HWHM of $|H(\omega)|^2$). Peak amplitude ∝ $Q^2$ because `TEST_RESONANCES` runs a steady-state chirp, not an impulse.
+1. **PSD generation:** `generate_psd_curve()` produces a Lorentzian peak centered on the predicted resonance frequency. Width = `center_freq * damping_ratio` (HWHM of $|H(\omega)|^2$). Peak amplitude ∝ $Q^2$ because `TEST_RESONANCES` runs a steady-state chirp, not an impulse. A full 2nd-order transfer function would have thinner high-frequency tails, but that model is deferred until the empirical secondary-peak constants can be retuned.
 
-2. **Mechanical imperfections:** Sliders like 3D COM Offsets, Bearing Preload, Hose Drag, and Gantry Racking inject geometrically calculated secondary frequency harmonics into the PSD curve. The simulator uses the right-hand rule to calculate orthogonal Yaw, Pitch, and Roll torques based on COM offsets. The amplitude of the resulting vibration peak is evaluated based on the exact 3D mounting offset of the ADXL sensor versus the Nozzle, and heavily damped by sliding friction from the rail bearing preload.
+2. **Mechanical imperfections:** Sliders like 3D COM Offsets, Bearing Preload, Hose Drag, and Gantry Racking inject geometrically calculated secondary frequency harmonics into the PSD curve. The simulator uses the right-hand rule to calculate orthogonal Yaw, Pitch, and Roll torques based on COM offsets. The amplitude of the resulting vibration peak is evaluated based on the exact 3D mounting offset of the ADXL sensor versus the Nozzle, and heavily damped by sliding friction from the rail bearing preload. The 70 mm torsion normalizer is a characteristic toolhead moment arm; the broad hose/sway multipliers approximate modal smearing and viscoelastic broadening in distributed flexible structures.
 
-3. **Shaper scoring:** `scoreShapers()` tests all five shapers. For each it runs a coarse 2 Hz sweep followed by a 0.2 Hz fine sweep around the minimum vibration pocket — matching Klipper's two-pass strategy. Scoring uses Klipper's empirical formula:
+3. **Shaper scoring:** `scoreShapers()` tests all five shapers using Klipper minimum frequencies (ZV 21Hz, MZV 23Hz, EI 29Hz, 2HUMP_EI 39Hz, 3HUMP_EI 48Hz), high-to-low iteration, and an interactive two-pass search: 2Hz coarse spacing followed by 0.2Hz fine spacing around the best vibration pocket. The Exact Klipper control runs `scoreShapersExact()`, an exhaustive 0.2Hz scan across the full allowed frequency range. Scoring uses Klipper's empirical formula:
    $$\text{score} = \text{smoothing} \times \left(v^{1.5} + 0.2v + 0.01\right)$$
-   where $v$ = remaining vibration fraction. This function always uses `DEFAULT_DAMPING_RATIO = 0.1` internally, not the user's slider.
+   where $v$ = remaining vibration fraction. Shaper construction uses `DEFAULT_DAMPING_RATIO = 0.1`, and remaining vibration is pessimized over Klipper's test damping ratios `[0.075, 0.1, 0.15]`.
 
-4. **Shaper selection:** Mirrors Klipper's selection logic — prefers lower score × 1.2 threshold, with a final override: if ZV is selected but another shaper achieves >10% better vibration reduction, use the better shaper instead.
+4. **Shaper selection:** Follows Klipper's score-threshold logic and allows a fitted result to replace the current best when both vibration and smoothing improve. Fast interactive mode uses a smoothing-aware ZV override so narrow single-mode peaks can still recommend ZV. Exact Klipper mode uses Klipper's final override: if ZV is selected but another shaper gives >10% better residual vibration, use that shaper.
 
 5. **Max acceleration:** `find_shaper_max_accel()` and `get_shaper_smoothing()` match Klipper's smoothing-based accel limit.
 
@@ -130,7 +138,7 @@ $$y_{\text{shaped}}(t) = \sum_i \frac{A_i}{\sum A} \cdot y(t - T_i)$$
 
 Normalization by $\sum A$ is mandatory — Klipper's raw $A_i$ coefficients sum to values > 1.0, so without it the position settles at an incorrect value.
 
-The step response uses `state.dampingRatio` (not the hardcoded 0.1) because it is a visualization of your specific printer's behavior, not a Klipper scoring artifact.
+The step response uses `state.dampingRatio` (not the hardcoded 0.1) because it is a visualization of your specific printer's behavior, not a Klipper scoring artifact. It is exact for the single SDOF primary mode at the selected resonance frequency; secondary PSD peaks such as yaw, hose drag, sway, belt delta, and mesh excitation are not included in this time-domain plot.
 
 ---
 
