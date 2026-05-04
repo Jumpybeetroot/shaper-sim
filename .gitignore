@@ -1,17 +1,44 @@
-journal-*.md
-PLAN_REVISION.md
-test.js
-MATH_REVIEW.md
-math.md
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+*.crt
+secrets/
+credentials/
 
-# Local planning, review, sample data, and personal agent/editor guidance
-implementation_plan.md
-shaper-sim-react/shaper_sim_review.md
-resonances_x.csv
-resonances_y.csv
-shaper_calibrate_klipper.py
-.cursorrules
-.windsurfrules
-AGENT.md
-CLAUDE.md
-.github/copilot-instructions.md
+# Dependencies/build artifacts
+node_modules/
+**/node_modules/
+dist/
+build/
+out/
+coverage/
+.cache/
+.next/
+.nuxt/
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Generated memory/site outputs
+site/
+wiki/site/
+raw/sessions/
+graphify-out/cache/
+graphify-out/cost.json
+graphify-out/manifest.json
+
+# Local agent/editor/runtime state
+.claude/
+.gemini/
+.kilo/
+.atl/
+.aider*
+.continue/
+.roo/
+.mcp.json
+
+# Legacy memory directory
+.memory/
