@@ -1,8 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "mcp__plugin_engram_engram__mem_save",
-      "mcp__plugin_engram_engram__mem_search",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
