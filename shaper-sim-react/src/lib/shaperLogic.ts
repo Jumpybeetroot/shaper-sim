@@ -339,7 +339,16 @@ export function predict_resonance(mass_g: number, belt_EA: number, tension_N: nu
         motorTorque: motor_torque_mNm,
         motorCurrentPct: motor_current_pct
     });
-    const effective_torque_Nm = (motor_torque_mNm / 1000.0) * saturation_factor * speedTorque.factor;
+    // Even unpowered steppers have detent/cogging torque (~2-5% of holding).
+    // Clamp the effective torque so the motor spring never fully vanishes from
+    // the series chain — this prevents both the 1/Kmotor→∞ collapse AND the
+    // non-monotonic frequency jump that would occur if the motor were removed.
+    // The detent floor is relative to rated holding torque, not commanded current.
+    const DETENT_TORQUE_FRACTION = 0.02;
+    const ratedTorqueNm = motor_torque_mNm / 1000.0;
+    const dynamicTorqueNm = ratedTorqueNm * saturation_factor * speedTorque.factor;
+    const detentTorqueNm = ratedTorqueNm * DETENT_TORQUE_FRACTION;
+    const effective_torque_Nm = Math.max(dynamicTorqueNm, detentTorqueNm);
     const K_theta = effective_torque_Nm * motor_rotor_teeth;
     
     const pulley_radius_m = (pulley_teeth * 2.0) / (2.0 * Math.PI) / 1000.0;

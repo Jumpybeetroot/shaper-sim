@@ -21,7 +21,9 @@ For a new agent session, read in this order:
 
 ## Immediate Next Action
 
-Memory stack bootstrap in progress. Verify scaffold completeness, check Graphify availability, commit and push.
+Memory stack scaffold is present. Continue normal simulator work; update Memory Bank when behavior, docs, validation, or workflow state changes.
+
+Stale references to the old external memory tool were removed from repo/global agent state. Do not reintroduce that tool name in docs or agent rules; use the repo-local Memory Bank plus the global bootstrap guide instead.
 
 ## Critical Gotchas (from AGENT.md)
 

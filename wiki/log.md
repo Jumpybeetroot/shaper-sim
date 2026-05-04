@@ -25,3 +25,11 @@ Initialized Memory Bank + wiki + raw scaffold per global bootstrap guide (`C:\Us
 - Graphify: not available (python -m graphify not found)
 - llm-wiki: not available (llmwiki command not found)
 - Memory Bank scaffold: complete
+
+## [2026-05-04] cleanup | Legacy memory tool references
+
+Removed stale references to the old external memory tool from repo/global agent state. Use Memory Bank and the global bootstrap guide for memory workflow going forward.
+
+**Verification:**
+- Scoped cleanup scan across this repo, `.agents`, `.codex`, `.claude`, `.kimi`, and Antigravity brain state found zero remaining matching text files.
+- Process scan found zero remaining processes from the removed tool path.

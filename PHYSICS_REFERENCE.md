@@ -104,7 +104,8 @@ During a real print at high speed, two dynamic effects occur:
    $$V_{bemf} \approx K_t \cdot 2\pi motor\_rps,\quad K_t = \frac{T_{hold}}{I_{rated}}$$
    $$I_{available} = \frac{\sqrt{V_{limit}^2 - V_{bemf}^2}}{Z}$$
    $$TorqueFactor = clamp\left(\frac{I_{available}}{I_{commanded}}, 0, 1\right)$$
-   where $V_{limit}$ is 92% of the configured supply voltage. This is still an approximation: it does not model chopper timing, microstep phase angle, driver decay mode, temperature, or a measured torque-speed curve. It is more physically grounded than the old fixed-speed knee because voltage, pulley tooth count, resistance, inductance, rated current, and rotor tooth count all affect high-speed torque.
+   $$\tau_{eff} = \max\left(\tau_{hold} \cdot TorqueFactor,\; 0.02 \cdot \tau_{hold}\right)$$
+   where $V_{limit}$ is 92% of the configured supply voltage. The 2% floor represents physical detent/cogging torque that persists even when the driver cannot deliver commanded current — without it, the motor spring stiffness would collapse to zero at high speed, producing a non-monotonic frequency jump. This is still an approximation: it does not model chopper timing, microstep phase angle, driver decay mode, temperature, or a measured torque-speed curve. It is more physically grounded than the old fixed-speed knee because voltage, pulley tooth count, resistance, inductance, rated current, and rotor tooth count all affect high-speed torque.
 
 2. **Belt Tooth Meshing Vibration**: A standard GT2 belt has a 2mm pitch. As it runs over the pulley, the teeth meshing action injects a continuous excitation frequency at:
    $$f_{mesh} = \frac{v}{2} \text{ Hz}$$

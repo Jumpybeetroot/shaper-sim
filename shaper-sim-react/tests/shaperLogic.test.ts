@@ -225,6 +225,27 @@ describe('physics helper behavior', () => {
         assert.ok(lowInductance > highInductance, `expected low inductance ${lowInductance} to exceed high inductance ${highInductance}`);
     });
 
+    it('does not collapse frequency to zero when speed torque factor reaches zero', () => {
+        const tension = getBeltTensionN(12000, 110);
+        const density = getBeltDensity(12000);
+        // At 800 mm/s with 24V/1.5mH, torque factor = 0. Frequency should
+        // settle at a detent-torque floor, NOT collapse to zero or jump up.
+        const staticResult = predict_resonance(450, 12000, tension, 1, 2200, 2, 550, 100, 50, 20, 84.5, density, 0);
+        const speedResult = predict_resonance(450, 12000, tension, 1, 2200, 2, 550, 100, 50, 20, 84.5, density, 800);
+        // Frequency must stay well above zero and below static (monotonic drop)
+        assert.ok(speedResult.f > 25, `expected detent-floor freq > 25 Hz, got ${speedResult.f}`);
+        assert.ok(speedResult.f < staticResult.f, `expected ${speedResult.f} to be below static ${staticResult.f}`);
+    });
+
+    it('keeps speed frequency monotonically decreasing past the torque cliff', () => {
+        const args = [450, 12000, getBeltTensionN(12000, 110), 1, 2200, 2, 550, 100, 50, 20, 84.5, getBeltDensity(12000)] as const;
+        const f630 = predict_resonance(...args, 630).f;
+        const f650 = predict_resonance(...args, 650).f;
+        const f800 = predict_resonance(...args, 800).f;
+        assert.ok(f650 <= f630, `expected f650 ${f650} <= f630 ${f630}`);
+        assert.ok(f800 <= f650 + 1e-9, `expected f800 ${f800} <= f650 ${f650}`);
+    });
+
     it('keeps zero-speed electrical torque factor at full available current', () => {
         const result = computeStepperSpeedTorque({
             printSpeed: 0,

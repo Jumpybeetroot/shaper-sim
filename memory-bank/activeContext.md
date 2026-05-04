@@ -4,7 +4,7 @@ Last updated: 2026-05-04
 
 ## Current Focus
 
-Memory stack bootstrap — initializing the Memory Bank + Graphify + llm-wiki style setup per the global bootstrap guide.
+Memory stack is initialized. Recent cleanup removed stale references to the old external memory tool from repo/global agent state.
 
 ## Project State
 
@@ -20,7 +20,6 @@ Memory stack bootstrap — initializing the Memory Bank + Graphify + llm-wiki st
 
 ## Next Steps
 
-1. Complete memory stack scaffold initialization
-2. Verify Graphify availability
-3. Run verification checks
-4. Commit and push changes
+1. Keep Memory Bank files updated as simulator behavior, docs, validation, or workflow state changes.
+2. Use the global bootstrap guide for future memory-stack repairs or installs.
+3. Run targeted simulator verification when code behavior changes.

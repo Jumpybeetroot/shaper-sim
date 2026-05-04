@@ -20,6 +20,7 @@ Last updated: 2026-05-04
 - [x] CSV import (Klipper `calibration_data_*.csv` overlay, normalized to simulated peak)
 - [x] Speed simulation (torque drop-off + GT2 belt tooth meshing at f = v/2 Hz)
 - [x] Memory stack bootstrap (Memory Bank + wiki + raw scaffold)
+- [x] Legacy external memory tool cleanup from repo/global agent state
 
 ## Remaining
 
@@ -34,6 +35,7 @@ Last updated: 2026-05-04
 - `npm run test` — passes (appHelpers.test.ts, shaperLogic.test.ts)
 - `npm run build` — passes (TypeScript check + Vite build)
 - Deployed and accessible at https://jumpybeetroot.github.io/shaper-sim/
+- Scoped cleanup scan found zero remaining references to the removed external memory tool across this repo and targeted global agent state.
 
 ## Verification Limits
 
